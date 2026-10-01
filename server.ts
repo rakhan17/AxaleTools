@@ -2,13 +2,12 @@ import express from 'express';
 import path from 'path';
 import multer from 'multer';
 import fs from 'fs';
-import { createServer as createViteServer } from 'vite';
 import { dbManager } from './server/db.ts';
 import { waService } from './server/wa.ts';
 import { SWGC_COLOR_PRESETS } from './server/swgcColors.ts';
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 // Set up JSON and URL-encoded parsers with high payload limits
 app.use(express.json({ limit: '64mb' }));
@@ -29,7 +28,7 @@ const upload = multer({
 // ==========================================
 
 // 1. Health check & status
-app.get('/api/health', (req, res) => {
+app.get(['/health', '/api/health'], (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
@@ -583,7 +582,11 @@ app.post('/api/danger/purge-all', async (req, res) => {
 // VITE MIDDLEWARE & SERVER BOOTSTRAP
 // ==========================================
 async function startServer() {
-  if (process.env.NODE_ENV !== 'production') {
+  const isDev = process.env.NODE_ENV === 'development';
+  const hasDist = fs.existsSync(path.join(process.cwd(), 'dist', 'index.html'));
+
+  if (isDev || (!hasDist && process.env.NODE_ENV !== 'production')) {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
@@ -597,11 +600,21 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`[Axale Tools Plus] Server aktif pada http://0.0.0.0:${PORT}`);
     // Auto initiate WA connection if configured
     waService.initConnection();
   });
+
+  const shutdown = () => {
+    console.log('[Axale Tools Plus] Menerima sinyal shutdown, menghentikan server...');
+    server.close(() => {
+      process.exit(0);
+    });
+  };
+
+  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', shutdown);
 }
 
 startServer();

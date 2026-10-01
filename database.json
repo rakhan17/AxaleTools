@@ -15,6 +15,12 @@
   },
   "logs": [
     {
+      "id": "log-1790818040655-5fbl0",
+      "timestamp": "2026-10-01T01:27:20.655Z",
+      "type": "system",
+      "message": "Koneksi WA terputus: kode status 401 [Sesi: session_default] - Sesi dibersihkan untuk login ulang."
+    },
+    {
       "id": "log-1790002910908-lrtyo",
       "timestamp": "2026-09-21T15:01:50.908Z",
       "type": "system",
@@ -56,9 +62,9 @@
       "id": "session_default",
       "name": "Akun Utama",
       "createdAt": "2026-09-21T15:00:52.755Z",
-      "lastActive": "2026-09-21T15:01:50.908Z",
+      "lastActive": "2026-10-01T05:59:34.786Z",
       "isActive": true,
-      "status": "disconnected",
+      "status": "connecting",
       "botEnabled": true,
       "avatarUrl": null
     }
