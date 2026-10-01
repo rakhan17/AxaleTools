@@ -1,0 +1,95 @@
+{
+  "botName": "Axale Tools Plus",
+  "globalBotEnabled": true,
+  "adminNumbers": [
+    "6281234567890"
+  ],
+  "settings": {
+    "defaultDelaySeconds": 3,
+    "announcementTemplate": {
+      "defaultFrom": "Axale",
+      "defaultRole": "Commander",
+      "defaultType": "Pemberitahuan Penting"
+    },
+    "autoSync": true
+  },
+  "logs": [
+    {
+      "id": "log-1790002910908-lrtyo",
+      "timestamp": "2026-09-21T15:01:50.908Z",
+      "type": "system",
+      "message": "Koneksi WA terputus: kode status 401 [Sesi: session_default] - Sesi dibersihkan untuk login ulang."
+    },
+    {
+      "id": "log-1790002905731-fvwpq",
+      "timestamp": "2026-09-21T15:01:45.731Z",
+      "type": "system",
+      "message": "Koneksi WA terputus: kode status 428 [Sesi: session_default]"
+    },
+    {
+      "id": "log-1790002905466-9ydq0",
+      "timestamp": "2026-09-21T15:01:45.466Z",
+      "type": "system",
+      "message": "Kode pairing resmi diminta untuk nomor +6285824567495: CEHT-V55X"
+    },
+    {
+      "id": "log-1790002858357-wsp5b",
+      "timestamp": "2026-09-21T15:00:58.357Z",
+      "type": "system",
+      "message": "Koneksi WA terputus: kode status 401 [Sesi: session_default] - Sesi dibersihkan untuk login ulang."
+    },
+    {
+      "id": "log-init",
+      "timestamp": "2026-09-21T15:00:52.755Z",
+      "type": "system",
+      "message": "Database Axale Tools Plus siap digunakan."
+    }
+  ],
+  "stats": {
+    "totalBroadcasts": 0,
+    "rvoProcessed": 0,
+    "groupStatusSent": 0,
+    "lastSync": null
+  },
+  "sessions": [
+    {
+      "id": "session_default",
+      "name": "Akun Utama",
+      "createdAt": "2026-09-21T15:00:52.755Z",
+      "lastActive": "2026-09-21T15:01:50.908Z",
+      "isActive": true,
+      "status": "disconnected",
+      "botEnabled": true,
+      "avatarUrl": null
+    }
+  ],
+  "activeSessionId": "session_default",
+  "disabledGroupBotJids": [],
+  "analytics": {
+    "totalMessagesTracked": 1,
+    "totalCommandsTracked": 0,
+    "groupActivity": {},
+    "userActivity": {},
+    "userChatActivity": {},
+    "timeSeries": {
+      "daily": {
+        "2026-09-21": 1
+      },
+      "monthly": {
+        "2026-09": 1
+      },
+      "yearly": {
+        "2026": 1
+      }
+    },
+    "commandCounts": {
+      "rvo": 0,
+      "swgc": 0,
+      "delswgc": 0,
+      "ghost": 0,
+      "promote": 0,
+      "demote": 0,
+      "broadcast": 0
+    }
+  }
+}

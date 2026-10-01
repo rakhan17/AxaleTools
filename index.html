@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <script>
+      // Safeguard for browser/iframe environments where window.fetch has only a getter
+      (function() {
+        try {
+          var _fetch = window.fetch;
+          var descriptor = {
+            get: function() {
+              return _fetch;
+            },
+            set: function(val) {
+              _fetch = val;
+            },
+            configurable: true,
+            enumerable: true
+          };
+
+          try {
+            Object.defineProperty(window, 'fetch', descriptor);
+          } catch (e1) {}
+
+          try {
+            if (typeof Window !== 'undefined' && Window.prototype) {
+              Object.defineProperty(Window.prototype, 'fetch', descriptor);
+            }
+          } catch (e2) {}
+        } catch (err) {}
+
+        // Global error suppressor for any rogue library trying to set window.fetch
+        window.addEventListener('error', function(e) {
+          if (e && e.message && e.message.indexOf('Cannot set property fetch') !== -1) {
+            e.preventDefault();
+            e.stopPropagation();
+            return true;
+          }
+        }, true);
+
+        // Suppress expected Vite websocket warning in sandboxed iframe (HMR disabled by platform)
+        window.addEventListener('unhandledrejection', function(event) {
+          var reasonStr = String((event && event.reason) || (event && event.reason && event.reason.message) || '');
+          if (reasonStr.indexOf('WebSocket closed without opened') !== -1 || reasonStr.indexOf('failed to connect to websocket') !== -1) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+          }
+        });
+      })();
+    </script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Axale Tools Plus</title>
+    <meta name="description" content="Web manajemen dan analitik WhatsApp overpower dengan Admin Radar, Broadcast, dan Bot Admin+" />
+    <meta property="og:title" content="Axale Tools Plus" />
+    <meta property="og:description" content="Web manajemen dan analitik WhatsApp overpower dengan Admin Radar, Broadcast, dan Bot Admin+" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
