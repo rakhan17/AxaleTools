@@ -122,7 +122,7 @@ export default function GeneralSettings({
               </h2>
             </div>
             <p className="text-xs text-neutral-500 mt-1 max-w-xl">
-              Matikan atau hidupkan seluruh respons bot (.rvo, .swgc, .ghost, dan perintah admin lainnya) secara global di seluruh obrolan dan grup.
+              Matikan atau hidupkan seluruh respons bot (.rvo, .swgc, .ghost, .ghostclear, .cleardata, dan perintah admin lainnya) secara global di seluruh obrolan dan grup.
             </p>
           </div>
 

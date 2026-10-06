@@ -564,7 +564,7 @@ app.put('/api/settings/general', (req, res) => {
   res.json({ success: true, settings: updated });
 });
 
-// 8. Danger Zone
+// 8. Danger Zone & Data Cleanup
 app.post('/api/danger/purge-all', async (req, res) => {
   try {
     const { resetSessions } = req.body || {};
@@ -575,6 +575,17 @@ app.post('/api/danger/purge-all', async (req, res) => {
     res.json(result);
   } catch (err: any) {
     res.status(500).json({ success: false, message: err?.message || 'Gagal membersihkan data' });
+  }
+});
+
+app.post('/api/clean-data', (req, res) => {
+  try {
+    const result = dbManager.clearWebData();
+    waService.trackedMessagesMap.clear();
+    waService.deletedMessagesList = [];
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err?.message || 'Gagal membersihkan data web' });
   }
 });
 

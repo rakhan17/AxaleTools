@@ -709,6 +709,69 @@ export class DatabaseManager {
     return { success: true, message: 'Semua riwayat chat, media, dan log lokal berhasil dihapus bersih.' };
   }
 
+  /**
+   * Membersihkan semua histori chat, berkas media sementara, analitik, dan log web
+   * untuk menghemat penyimpanan server (dipanggil via perintah .cleardata).
+   * Sesi akun WhatsApp, nomor admin, dan pengaturan bot tetap aman terjaga.
+   */
+  public clearWebData(): { success: boolean; message: string; deletedFilesCount: number } {
+    const db = this.getDatabase();
+    db.logs = [
+      {
+        id: `log-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        type: 'system',
+        message: 'Histori chat, berkas media sementara, dan analitik web berhasil dibersihkan via .cleardata.',
+      },
+    ];
+    db.stats = {
+      totalBroadcasts: 0,
+      rvoProcessed: 0,
+      groupStatusSent: 0,
+      lastSync: new Date().toISOString(),
+    };
+    db.analytics = {
+      totalMessagesTracked: 0,
+      totalCommandsTracked: 0,
+      groupActivity: {},
+      userActivity: {},
+      userChatActivity: {},
+      timeSeries: { daily: {}, monthly: {}, yearly: {} },
+      commandCounts: {
+        rvo: 0,
+        swgc: 0,
+        delswgc: 0,
+        ghost: 0,
+        promote: 0,
+        demote: 0,
+        broadcast: 0,
+      },
+    };
+    this.saveDatabase(db);
+
+    let deletedFilesCount = 0;
+    const uploadsDir = path.resolve(process.cwd(), 'temp_media');
+    if (fs.existsSync(uploadsDir)) {
+      try {
+        const files = fs.readdirSync(uploadsDir);
+        for (const file of files) {
+          try {
+            fs.unlinkSync(path.join(uploadsDir, file));
+            deletedFilesCount++;
+          } catch {}
+        }
+      } catch (err) {
+        console.warn('[DB] Gagal membersihkan temp_media:', err);
+      }
+    }
+
+    return {
+      success: true,
+      message: 'Histori chat web, berkas media sementara, dan analitik berhasil dibersihkan.',
+      deletedFilesCount,
+    };
+  }
+
   // ==========================================
   // MULTI-ACCOUNT & SESSION MANAGEMENT
   // ==========================================

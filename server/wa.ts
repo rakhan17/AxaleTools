@@ -74,6 +74,11 @@ export interface TrackedMessageReader {
   readAt: number;
 }
 
+export interface TrackedEditHistory {
+  text: string;
+  editedAt: number;
+}
+
 export interface TrackedMessage {
   id: string;
   remoteJid: string;
@@ -88,6 +93,8 @@ export interface TrackedMessage {
   readBy: TrackedMessageReader[];
   isDeleted: boolean;
   deletedAt: number | null;
+  isEdited?: boolean;
+  editHistory?: TrackedEditHistory[];
 }
 
 export function formatWib(timestamp: number): string {
@@ -121,6 +128,7 @@ export class WhatsAppService {
   public activeGroupStories: ActiveGroupStory[] = [];
   public trackedMessagesMap: Map<string, TrackedMessage> = new Map();
   public deletedMessagesList: TrackedMessage[] = [];
+  public editIdToTargetIdMap: Map<string, string> = new Map();
 
   private avatarCache: Map<string, { url: string | null; timestamp: number }> = new Map();
   private lidToPhoneMap: Map<string, string> = new Map();
@@ -174,6 +182,7 @@ export class WhatsAppService {
     this.activeGroupStories = [];
     this.avatarCache.clear();
     this.lidToPhoneMap.clear();
+    this.editIdToTargetIdMap.clear();
 
     const sessInfo = dbManager.getSessions().find((s) => s.id === sessionId);
     if (sessInfo && sessInfo.phone) {
@@ -1270,20 +1279,42 @@ export class WhatsAppService {
       return;
     }
 
-    // 4. Command .ghost (Lihat Pesan Dihapus oleh User)
-    if (lowerCmd.startsWith('ghost')) {
-      const rawArg = cleanCmd.slice(5).trim();
+    // 4. Command .ghostclear (Bersihkan Histori Pesan Terhapus)
+    if (lowerCmd.startsWith('ghostclear')) {
+      const rawArg = cleanCmd.slice(10).trim();
+      await this.handleGhostClearCommand(msg, remoteJid, senderJid, senderPhone, rawArg);
+      return;
+    }
+
+    // 5. Command .ghost / .edit (Lihat Histori Pesan Dihapus / Diedit oleh User)
+    if (
+      lowerCmd.startsWith('ghost') ||
+      lowerCmd.startsWith('edit') ||
+      lowerCmd.startsWith('cekedit') ||
+      lowerCmd.startsWith('history')
+    ) {
+      let rawArg = '';
+      if (lowerCmd.startsWith('ghost')) rawArg = cleanCmd.slice(5).trim();
+      else if (lowerCmd.startsWith('edit')) rawArg = cleanCmd.slice(4).trim();
+      else if (lowerCmd.startsWith('cekedit')) rawArg = cleanCmd.slice(7).trim();
+      else if (lowerCmd.startsWith('history')) rawArg = cleanCmd.slice(7).trim();
       await this.handleGhostCommand(msg, remoteJid, senderJid, senderPhone, rawArg);
       return;
     }
 
-    // 5. Command .promote @tag / .promote me
+    // 6. Command .cleardata (Bersihkan Semua Data Chat/Media Web Server)
+    if (lowerCmd.startsWith('cleardata')) {
+      await this.handleClearDataCommand(msg, remoteJid, senderJid, senderPhone);
+      return;
+    }
+
+    // 7. Command .promote @tag / .promote me
     if (lowerCmd.startsWith('promote')) {
       await this.handlePromoteCommand(msg, remoteJid, senderJid, senderPhone, cleanCmd);
       return;
     }
 
-    // 6. Command .demote @tag / .demote me
+    // 8. Command .demote @tag / .demote me
     if (lowerCmd.startsWith('demote')) {
       await this.handleDemoteCommand(msg, remoteJid, senderJid, senderPhone, cleanCmd);
       return;
@@ -1372,9 +1403,7 @@ export class WhatsAppService {
           remoteJid,
           {
             image: buffer,
-            caption: originalCaption
-              ? `*Media Sekali Lihat Terbuka (.rvo)*:\n${originalCaption}`
-              : '*Media Sekali Lihat Terbuka (.rvo)*',
+            ...(originalCaption ? { caption: originalCaption } : {}),
           },
           { quoted: msg }
         );
@@ -1383,9 +1412,7 @@ export class WhatsAppService {
           remoteJid,
           {
             video: buffer,
-            caption: originalCaption
-              ? `*Media Sekali Lihat Terbuka (.rvo)*:\n${originalCaption}`
-              : '*Media Sekali Lihat Terbuka (.rvo)*',
+            ...(originalCaption ? { caption: originalCaption } : {}),
           },
           { quoted: msg }
         );
@@ -1406,11 +1433,6 @@ export class WhatsAppService {
       dbManager.addLog('rvo', `Berhasil memproses .rvo untuk Admin+ +${senderPhone} di ${remoteJid}`);
     } catch (err: any) {
       console.error('[WA] Kesalahan pemrosesan .rvo:', err);
-      await (this.sock as any).sendMessage(
-        remoteJid,
-        { text: `Gagal membuka View Once: ${err?.message || 'Error internal'}` },
-        { quoted: msg }
-      );
     }
   }
 
@@ -1477,27 +1499,16 @@ export class WhatsAppService {
 
         // @ts-ignore
         const buffer = (await downloadMediaMessage(mediaContext, 'buffer', {})) as Buffer;
-        const finalCaption = rawText || mediaMessage.caption || '';
+        const { text: finalCaption } = this.extractSwgcTextAndColor(rawText || mediaMessage.caption || '');
 
         await this.sendGroupStatusNative(targetGroupIds, {
           ...(isImage ? { image: buffer } : { video: buffer }),
-          caption: finalCaption,
+          ...(finalCaption ? { caption: finalCaption } : {}),
         });
-
-        await (this.sock as any).sendMessage(
-          remoteJid,
-          {
-            text: `*Status Cerita Grup (Media) Berhasil Dipublikasikan!*\n` +
-                  `*Target:* ${targetGroupIds.length} grup\n` +
-                  (finalCaption ? `*Caption:* ${finalCaption}\n` : '') +
-                  `\n_Status media kini aktif di lingkaran profil grup WhatsApp._`,
-          },
-          { quoted: msg }
-        );
 
         dbManager.incrementStat('groupStatusSent');
         dbManager.recordUserCommand(senderPhone, senderJid, 'swgc');
-        dbManager.addLog('swgc', `Admin+ +${senderPhone} mempublikasikan status media ke ${targetGroupIds.length} grup`);
+        dbManager.addLog('swgc', `Status media berhasil dipublikasikan ke ${targetGroupIds.length} grup (Oleh Admin+ +${senderPhone})`);
         return;
       }
 
@@ -1511,15 +1522,9 @@ export class WhatsAppService {
         return;
       }
 
-      let statusText = cleanInput;
-      let colorArg = 'random';
-
-      // Parse .swgc [Isi Pesan] --[warna]
-      const colorMatch = cleanInput.match(/^(.*?)\s+--([a-zA-Z0-9#]+)$/s);
-      if (colorMatch) {
-        statusText = colorMatch[1].trim();
-        colorArg = colorMatch[2].trim().toLowerCase();
-      }
+      // Ekstraksi bersih teks status dan flag warna (--random, --hijau, dsb)
+      // Flag warna langsung dipotong dari teks sehingga TIDAK PERNAH masuk ke status
+      const { text: statusText, color: colorArg } = this.extractSwgcTextAndColor(cleanInput);
 
       if (!statusText) {
         await this.sendSwgcColorGuide(remoteJid, msg);
@@ -1534,29 +1539,39 @@ export class WhatsAppService {
         font: 1,
       });
 
-      await (this.sock as any).sendMessage(
-        remoteJid,
-        {
-          text: `*Status Cerita Grup Berhasil Dipublikasikan!*\n\n` +
-                `*Teks:* ${statusText}\n` +
-                `*Warna:* ${colorData.name} (\`${colorData.hex}\`)\n` +
-                `*Target:* ${targetGroupIds.length} grup\n\n` +
-                `_Status teks kini aktif di lingkaran profil grup WhatsApp._`,
-        },
-        { quoted: msg }
-      );
-
       dbManager.incrementStat('groupStatusSent');
       dbManager.recordUserCommand(senderPhone, senderJid, 'swgc');
-      dbManager.addLog('swgc', `Admin+ +${senderPhone} mempublikasikan status teks ke ${targetGroupIds.length} grup (Warna: ${colorData.name})`);
+      dbManager.addLog('swgc', `Status teks berhasil dipublikasikan ke ${targetGroupIds.length} grup (Warna: ${colorData.name}, Oleh Admin+ +${senderPhone})`);
     } catch (err: any) {
       console.error('[WA] Gagal memproses .swgc:', err);
-      await (this.sock as any).sendMessage(
-        remoteJid,
-        { text: `Gagal mempublikasikan status grup: ${err?.message || 'Error internal'}` },
-        { quoted: msg }
-      );
+      dbManager.addLog('swgc', `Gagal mempublikasikan status cerita grup: ${err?.message || 'Error internal'}`);
     }
+  }
+
+  /**
+   * Helper untuk mengekstrak teks status dan flag warna background secara bersih.
+   * Menjamin flag warna (seperti --random, --hijau, --biru, --#HEX) terpotong bersih
+   * dari pesan sehingga TIDAK PERNAH masuk ke teks status WhatsApp.
+   */
+  private extractSwgcTextAndColor(raw: string): { text: string; color: string } {
+    let text = (raw || '').trim();
+    let color = 'random';
+
+    // Cocokkan pola --warna di akhir kalimat (dengan toleransi spasi/enter di ujungnya)
+    const endMatch = text.match(/(?:^|\s+)--\s*([a-zA-Z0-9#_-]+)\s*$/i);
+    if (endMatch) {
+      color = endMatch[1].toLowerCase().trim();
+      text = text.slice(0, endMatch.index).trim();
+    } else {
+      // Cocokkan jika user menuliskan --warna di tengah atau setelah spasi
+      const inlineMatch = text.match(/\s+--\s*([a-zA-Z0-9#_-]+)(?:\s+|$)/i);
+      if (inlineMatch) {
+        color = inlineMatch[1].toLowerCase().trim();
+        text = text.replace(inlineMatch[0], ' ').trim();
+      }
+    }
+
+    return { text, color };
   }
 
   /**
@@ -2234,15 +2249,147 @@ export class WhatsAppService {
   }
 
   /**
-   * Track incoming message for Anti-Delete (.ghost)
+   * Helper to inspect any message and extract WhatsApp edit protocol data if present
+   */
+  public extractEditProtocol(msg: any): { targetId: string; newText: string; editTimestamp: number; targetRemoteJid: string; editMsgId?: string } | null {
+    if (!msg) return null;
+
+    const editMsgId = msg.key?.id;
+
+    // Helper to find protocolMessage or editedMessage anywhere in object tree
+    const findProtocolOrEdited = (obj: any, depth = 0): any => {
+      if (!obj || depth > 6) return null;
+      if (obj.protocolMessage) return obj.protocolMessage;
+      if (obj.editedMessage) {
+        if (obj.editedMessage.protocolMessage) return obj.editedMessage.protocolMessage;
+        if (obj.editedMessage.message?.protocolMessage) return obj.editedMessage.message.protocolMessage;
+        return obj.editedMessage;
+      }
+      if (obj.message) return findProtocolOrEdited(obj.message, depth + 1);
+      if (obj.ephemeralMessage) return findProtocolOrEdited(obj.ephemeralMessage, depth + 1);
+      if (obj.viewOnceMessage) return findProtocolOrEdited(obj.viewOnceMessage, depth + 1);
+      if (obj.viewOnceMessageV2) return findProtocolOrEdited(obj.viewOnceMessageV2, depth + 1);
+      if (obj.documentWithCaptionMessage) return findProtocolOrEdited(obj.documentWithCaptionMessage, depth + 1);
+      return null;
+    };
+
+    const targetNode = findProtocolOrEdited(msg.message || msg);
+    if (!targetNode) return null;
+
+    // If it's a protocolMessage
+    if (targetNode.key && (targetNode.type === 14 || (targetNode.type as any) === 'MESSAGE_EDIT' || targetNode.editedMessage)) {
+      const targetId = targetNode.key?.id;
+      if (!targetId) return null;
+
+      // Extract new text using unwrapMessage on editedMessage
+      const unwrapped = this.unwrapMessage(targetNode.editedMessage || targetNode);
+      const newText = unwrapped.text;
+
+      return {
+        targetId,
+        newText,
+        editTimestamp: Number(targetNode.timestampMs) || (Number(msg.messageTimestamp) * 1000) || Date.now(),
+        targetRemoteJid: targetNode.key?.remoteJid || msg.key?.remoteJid || '',
+        editMsgId,
+      };
+    }
+
+    // If it's an editedMessage node directly
+    if (targetNode.message || targetNode.conversation || targetNode.extendedTextMessage) {
+      const unwrapped = this.unwrapMessage(targetNode);
+      if (unwrapped.text && editMsgId) {
+        return {
+          targetId: editMsgId,
+          newText: unwrapped.text,
+          editTimestamp: (Number(msg.messageTimestamp) * 1000) || Date.now(),
+          targetRemoteJid: msg.key?.remoteJid || '',
+          editMsgId,
+        };
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Resolves a clean phone number from a JID, checking lidToPhoneMap and contacts.
+   * If it's an LID that cannot be resolved to a phone number, returns empty string ''
+   * instead of leaking raw internal LID numbers.
+   */
+  public resolvePhone(rawJid: string): string {
+    if (!rawJid) return '';
+    let jid = rawJid;
+    if (this.lidToPhoneMap.has(rawJid)) {
+      jid = this.lidToPhoneMap.get(rawJid) || rawJid;
+    }
+    const clean = jid.split('@')[0]?.split(':')[0] || '';
+    if (this.lidToPhoneMap.has(clean)) {
+      const mapped = this.lidToPhoneMap.get(clean) || '';
+      if (mapped) jid = mapped;
+    }
+
+    if (jid.includes('@lid')) {
+      for (const [cJid, c] of this.contacts.entries()) {
+        if (c.phone && (cJid === jid || (c as any).lid === jid)) {
+          return c.phone;
+        }
+      }
+      return '';
+    }
+
+    const phone = extractPhoneFromJid(jid);
+    if (phone.length >= 14 && phone.startsWith('10')) {
+      return '';
+    }
+    return phone;
+  }
+
+  /**
+   * Helper to format how a user is tagged / displayed in .ghost.
+   * Prioritizes real phone number (e.g. @6281234567890), or contact name / pushName (e.g. @Budi).
+   * NEVER displays a raw 15-digit internal LID like @104829103810293.
+   */
+  public formatUserDisplayTag(
+    jid: string,
+    phone?: string,
+    pushName?: string
+  ): { displayTag: string; mentionJids: string[] } {
+    const realPhone = phone || this.resolvePhone(jid);
+    const contact = this.contacts.get(jid) || (realPhone ? this.contacts.get(`${realPhone}@s.whatsapp.net`) : null);
+    const name = contact?.name || pushName || '';
+
+    const mentionJids: string[] = [];
+    if (jid) mentionJids.push(jid);
+    if (realPhone) {
+      const pJid = `${realPhone}@s.whatsapp.net`;
+      if (!mentionJids.includes(pJid)) mentionJids.push(pJid);
+    }
+
+    let displayTag = '';
+    if (realPhone && !realPhone.startsWith('10') && realPhone.length <= 13) {
+      displayTag = `@${realPhone}`;
+    } else if (name && !name.startsWith('+10')) {
+      displayTag = `@${name}`;
+    } else {
+      displayTag = pushName ? `@${pushName}` : 'Pengirim';
+    }
+
+    return { displayTag, mentionJids };
+  }
+
+  /**
+   * Track incoming message for Anti-Delete & Anti-Edit (.ghost)
    */
   public async trackIncomingMessage(msg: WAMessage): Promise<void> {
     if (!msg.message) return;
     const msgId = msg.key?.id;
     if (!msgId) return;
 
-    // Detect protocol revoke messages (user pressed "Delete for everyone")
-    const protocolMsg = msg.message?.protocolMessage;
+    // 1. Detect protocol revoke messages (user pressed "Delete for everyone")
+    const protocolMsg =
+      msg.message?.protocolMessage ||
+      msg.message?.editedMessage?.message?.protocolMessage;
+
     if (protocolMsg && (protocolMsg.type === 0 || (protocolMsg.type as any) === 'REVOKE')) {
       const revokedKey = protocolMsg.key;
       if (revokedKey?.id) {
@@ -2251,11 +2398,41 @@ export class WhatsAppService {
       return;
     }
 
+    // 2. Detect protocol edit messages (user edited a message)
+    const editInfo = this.extractEditProtocol(msg);
+    if (editInfo && editInfo.targetId) {
+      this.markMessageAsEdited(
+        editInfo.targetId,
+        editInfo.newText,
+        editInfo.editTimestamp,
+        editInfo.targetRemoteJid,
+        editInfo.editMsgId || msgId
+      );
+      return;
+    }
+
     const unwrapped = this.unwrapMessage(msg);
     const remoteJid = msg.key.remoteJid || '';
     const participant = msg.key.participant || (msg as any).participant || (msg.key.fromMe ? (this.sock as any)?.user?.id : remoteJid) || '';
-    const senderPhone = extractPhoneFromJid(participant) || extractPhoneFromJid(remoteJid);
-    const senderName = msg.pushName || (msg as any).verifiedName || `+${senderPhone}`;
+    const senderPhone = this.resolvePhone(participant) || this.resolvePhone(remoteJid);
+    const senderName = msg.pushName || (msg as any).verifiedName || (senderPhone ? `+${senderPhone}` : '');
+
+    // CRITICAL: Jika pesan dengan msgId SUDAH tercatat, JANGAN menimpa dan menghapus riwayatnya!
+    const existing = this.trackedMessagesMap.get(msgId);
+    if (existing) {
+      const newText = unwrapped.text || '';
+      // Jika teksnya berubah dari yang tercatat sebelumnya, ini adalah editan!
+      if (newText && newText !== existing.text) {
+        this.markMessageAsEdited(
+          msgId,
+          newText,
+          (Number(msg.messageTimestamp) || 0) * 1000 || Date.now(),
+          remoteJid,
+          msgId
+        );
+      }
+      return;
+    }
 
     let mediaType: 'text' | 'image' | 'video' | 'audio' = 'text';
     let mediaBuffer: Buffer | undefined;
@@ -2298,18 +2475,20 @@ export class WhatsAppService {
       readBy: [],
       isDeleted: false,
       deletedAt: null,
+      isEdited: false,
+      editHistory: [],
     };
 
     this.trackedMessagesMap.set(msgId, tracked);
 
-    if (this.trackedMessagesMap.size > 1500) {
+    if (this.trackedMessagesMap.size > 2000) {
       const oldestKey = this.trackedMessagesMap.keys().next().value;
       if (oldestKey) this.trackedMessagesMap.delete(oldestKey);
     }
   }
 
   /**
-   * Handle messages.update event (message revoked / deleted)
+   * Handle messages.update event (message revoked / deleted / edited)
    */
   public handleMessageUpdate(update: any): void {
     if (!update || !update.key) return;
@@ -2324,6 +2503,27 @@ export class WhatsAppService {
 
     if (isRevoke) {
       this.markMessageAsDeleted(msgId, key.remoteJid || '');
+      return;
+    }
+
+    // Check if this update is an edit via protocol
+    const editInfo = this.extractEditProtocol(update.update || update);
+    if (editInfo && editInfo.targetId) {
+      this.markMessageAsEdited(
+        editInfo.targetId,
+        editInfo.newText,
+        editInfo.editTimestamp,
+        editInfo.targetRemoteJid || key.remoteJid || '',
+        editInfo.editMsgId || msgId
+      );
+      return;
+    }
+
+    if (update.update?.message || update.update?.editedMessage) {
+      const unwrappedUpd = this.unwrapMessage(update.update.editedMessage || update.update.message);
+      if (unwrappedUpd.text) {
+        this.markMessageAsEdited(msgId, unwrappedUpd.text, Date.now(), key.remoteJid || '', msgId);
+      }
     }
   }
 
@@ -2338,7 +2538,7 @@ export class WhatsAppService {
 
     const readerJid = receipt.receipt?.userJid || receipt.participant;
     if (readerJid) {
-      const readerPhone = extractPhoneFromJid(readerJid);
+      const readerPhone = this.resolvePhone(readerJid) || extractPhoneFromJid(readerJid);
       if (readerPhone && !tracked.readBy.some((r) => r.phone === readerPhone)) {
         const contactName = this.contacts.get(readerJid)?.name || `+${readerPhone}`;
         tracked.readBy.push({
@@ -2351,35 +2551,425 @@ export class WhatsAppService {
   }
 
   /**
+   * Helper to retrieve a message by ID or any of its edit aliases
+   */
+  public getTrackedOrDeletedMessage(id: string): TrackedMessage | undefined {
+    if (!id) return undefined;
+    if (this.trackedMessagesMap.has(id)) {
+      return this.trackedMessagesMap.get(id);
+    }
+    const targetId = this.editIdToTargetIdMap.get(id);
+    if (targetId && this.trackedMessagesMap.has(targetId)) {
+      return this.trackedMessagesMap.get(targetId);
+    }
+    let found = this.deletedMessagesList.find((d) => d.id === id);
+    if (!found && targetId) {
+      found = this.deletedMessagesList.find((d) => d.id === targetId);
+    }
+    if (!found) {
+      for (const [eId, tId] of this.editIdToTargetIdMap.entries()) {
+        if (eId === id) {
+          found = this.deletedMessagesList.find((d) => d.id === tId);
+          if (found) break;
+        }
+      }
+    }
+    return found;
+  }
+
+  /**
    * Mark message as deleted and register in deletedMessagesList
    */
   public markMessageAsDeleted(msgId: string, remoteJid: string): void {
-    const tracked = this.trackedMessagesMap.get(msgId);
+    const actualTargetId = this.editIdToTargetIdMap.get(msgId) || msgId;
+    let tracked = this.trackedMessagesMap.get(actualTargetId);
+    if (!tracked && actualTargetId !== msgId) {
+      tracked = this.trackedMessagesMap.get(msgId);
+    }
+
     if (tracked) {
       if (tracked.isDeleted) return;
       tracked.isDeleted = true;
       tracked.deletedAt = Date.now();
 
-      this.deletedMessagesList.unshift({ ...tracked });
+      // Deep clone editHistory agar seluruh riwayat editan sebelum dihapus aman permanen
+      const clonedHistory = Array.isArray(tracked.editHistory)
+        ? tracked.editHistory.map((h) => ({ ...h }))
+        : [];
+
+      const existIdx = this.deletedMessagesList.findIndex((d) => d.id === tracked!.id);
+      if (existIdx !== -1) {
+        this.deletedMessagesList[existIdx] = {
+          ...tracked,
+          editHistory: clonedHistory,
+        };
+      } else {
+        this.deletedMessagesList.unshift({
+          ...tracked,
+          editHistory: clonedHistory,
+        });
+      }
+
       if (this.deletedMessagesList.length > 500) {
         this.deletedMessagesList.pop();
       }
       dbManager.addLog(
         'bot',
-        `Pesan terhapus terdeteksi dari +${tracked.senderPhone} di ${remoteJid || tracked.remoteJid}`
+        `Pesan terhapus terdeteksi dari +${tracked.senderPhone || 'User'} di ${remoteJid || tracked.remoteJid}`
+      );
+    }
+  }
+
+  /**
+   * Mark message as edited and record previous text in editHistory
+   */
+  public markMessageAsEdited(
+    msgId: string,
+    newText: string,
+    editTimestamp?: number,
+    remoteJid?: string,
+    editMsgId?: string
+  ): void {
+    if (!msgId || !newText) return;
+
+    // Resolve target ID jika msgId merupakan alias / editMsgId
+    const actualTargetId = this.editIdToTargetIdMap.get(msgId) || msgId;
+    if (editMsgId && editMsgId !== actualTargetId) {
+      this.editIdToTargetIdMap.set(editMsgId, actualTargetId);
+    }
+    if (msgId !== actualTargetId) {
+      this.editIdToTargetIdMap.set(msgId, actualTargetId);
+    }
+
+    let tracked = this.trackedMessagesMap.get(actualTargetId);
+    const nowTime = editTimestamp && editTimestamp > 1000000000000 ? editTimestamp : Date.now();
+
+    if (!tracked) {
+      // Cek apakah pesan sudah berada di deletedMessagesList
+      const inDeleted = this.deletedMessagesList.find((d) => d.id === actualTargetId);
+      if (inDeleted) {
+        if (!inDeleted.editHistory) inDeleted.editHistory = [];
+        if (newText !== inDeleted.text) {
+          inDeleted.editHistory.push({
+            text: inDeleted.text || inDeleted.mediaCaption || '(Pesan awal)',
+            editedAt: inDeleted.createdAt || nowTime - 1000,
+          });
+          inDeleted.text = newText;
+          inDeleted.isEdited = true;
+        }
+        return;
+      }
+
+      // Jika pesan belum tercatat, inisialisasi dengan teks baru
+      const phone = this.resolvePhone(remoteJid || '');
+      tracked = {
+        id: actualTargetId,
+        remoteJid: remoteJid || '',
+        senderJid: '',
+        senderPhone: phone,
+        senderName: phone ? `+${phone}` : '',
+        text: newText,
+        mediaType: 'text',
+        mediaCaption: '',
+        createdAt: nowTime - 2000,
+        readBy: [],
+        isDeleted: false,
+        deletedAt: null,
+        isEdited: true,
+        editHistory: [],
+      };
+      this.trackedMessagesMap.set(actualTargetId, tracked);
+      return;
+    }
+
+    if (!tracked.editHistory) {
+      tracked.editHistory = [];
+    }
+
+    // Rekam versi teks sebelumnya ke editHistory HANYA jika teks baru berbeda
+    if (newText !== tracked.text) {
+      const prevText = tracked.text || tracked.mediaCaption;
+      if (prevText) {
+        const prevTimestamp =
+          tracked.editHistory.length === 0
+            ? (tracked.createdAt || nowTime - 1000)
+            : nowTime;
+
+        tracked.editHistory.push({
+          text: prevText,
+          editedAt: prevTimestamp,
+        });
+      }
+
+      tracked.text = newText;
+      tracked.isEdited = true;
+
+      // Perbarui juga data di deletedMessagesList jika pesan ini sudah tercatat terhapus
+      const deletedIdx = this.deletedMessagesList.findIndex((d) => d.id === actualTargetId);
+      if (deletedIdx !== -1) {
+        this.deletedMessagesList[deletedIdx] = {
+          ...tracked,
+          editHistory: [...tracked.editHistory],
+        };
+      }
+
+      dbManager.addLog(
+        'bot',
+        `Pesan diedit oleh +${tracked.senderPhone || 'User'} di ${tracked.remoteJid || remoteJid} (Total riwayat edit: ${tracked.editHistory.length}x)`
+      );
+    }
+  }
+
+  /**
+   * Mengirim laporan 1 bubble chat untuk 1 pesan yang diedit dan/atau terhapus.
+   * Menampilkan pesan terakhir di bagian atas, seluruh riwayat teks sebelum diedit
+   * di bagian tengah, dan status ringkas serta tag pengguna di bagian bawah.
+   */
+  private async sendGhostMessageReport(
+    remoteJid: string,
+    item: TrackedMessage,
+    quotedMsg: WAMessage
+  ): Promise<void> {
+    const currentContent = item.text || item.mediaCaption || '';
+
+    // Format riwayat edit jika pesan ini pernah diedit (disajikan dalam 1 bubble chat)
+    let editHistoryBlock = '';
+    if (item.editHistory && item.editHistory.length > 0) {
+      const lines = item.editHistory.map((h, i) => {
+        const time = formatWib(h.editedAt);
+        const label = i === 0 ? 'Pesan Awal' : `Edit ${i}`;
+        return `• ${label}: ${h.text} (${time})`;
+      });
+      editHistoryBlock = `\n\nRiwayat Pesan Sebelum Diedit:\n${lines.join('\n')}`;
+    }
+
+    const timeStr = item.deletedAt
+      ? formatWib(item.deletedAt)
+      : item.editHistory && item.editHistory.length > 0
+      ? formatWib(item.createdAt || item.editHistory[item.editHistory.length - 1].editedAt)
+      : formatWib(item.createdAt);
+
+    // Resolve user tag & mentions secara aman (menghindari raw LID)
+    const { displayTag, mentionJids } = this.formatUserDisplayTag(
+      item.senderJid,
+      item.senderPhone,
+      item.senderName
+    );
+
+    let actionLabel = 'Pesan';
+    if (item.isDeleted && item.isEdited) {
+      actionLabel = 'Diedit lalu Dihapus';
+    } else if (item.isDeleted) {
+      actionLabel = 'Dihapus';
+    } else if (item.isEdited) {
+      actionLabel = 'Diedit';
+    }
+
+    const statusText = `${actionLabel} oleh ${displayTag} (${timeStr})`;
+
+    // Satukan pesan terkini, seluruh riwayat edit sebelum diedit, dan status ke dalam 1 BUBBLE CHAT
+    let reportText = '';
+    if (currentContent) {
+      reportText = `${currentContent}${editHistoryBlock}\n\n${statusText}`;
+    } else if (editHistoryBlock) {
+      reportText = `${editHistoryBlock.trim()}\n\n${statusText}`;
+    } else {
+      reportText = statusText;
+    }
+
+    if (item.mediaBuffer && item.mediaType && item.mediaType !== 'text') {
+      if (item.mediaType === 'image') {
+        await (this.sock as any).sendMessage(
+          remoteJid,
+          {
+            image: item.mediaBuffer,
+            caption: reportText,
+            mentions: mentionJids,
+          },
+          { quoted: quotedMsg }
+        );
+      } else if (item.mediaType === 'video') {
+        await (this.sock as any).sendMessage(
+          remoteJid,
+          {
+            video: item.mediaBuffer,
+            caption: reportText,
+            mentions: mentionJids,
+          },
+          { quoted: quotedMsg }
+        );
+      } else if (item.mediaType === 'audio') {
+        await (this.sock as any).sendMessage(
+          remoteJid,
+          {
+            text: reportText,
+            mentions: mentionJids,
+          },
+          { quoted: quotedMsg }
+        );
+        await (this.sock as any).sendMessage(
+          remoteJid,
+          {
+            audio: item.mediaBuffer,
+            mimetype: 'audio/mp4',
+            ptt: true,
+          },
+          { quoted: quotedMsg }
+        );
+      }
+    } else {
+      await (this.sock as any).sendMessage(
+        remoteJid,
+        {
+          text: reportText,
+          mentions: mentionJids,
+        },
+        { quoted: quotedMsg }
       );
     }
   }
 
   /**
    * Command .ghost implementation:
-   * Retrieves latest deleted message of target user.
-   * - In group: .ghost @user or reply or .ghost
-   * - In private: .ghost (no tag needed)
-   * Shows sent date/time, deleted date/time, readers list, and restores original message/media.
-   * Zero emojis.
+   * 1. Jika di-REPLY ke pesan tertentu: langsung me-reveal riwayat pesan yang di-reply tersebut
+   *    (menampilkan isi pesan terkini, riwayat editan sebelumnya, dan status penghapusan dalam 1 bubble chat).
+   * 2. Jika tanpa reply: mencari riwayat pesan terhapus/diedit pada user/chat tersebut.
+   * - Hening jika tidak ada riwayat terhapus/diedit.
    */
   private async handleGhostCommand(
+    msg: WAMessage,
+    remoteJid: string,
+    senderJid: string,
+    senderPhone: string,
+    rawArg: string
+  ): Promise<void> {
+    try {
+      const isGroup = remoteJid.endsWith('@g.us');
+      const unwrapped = this.unwrapMessage(msg);
+      const quotedStanzaId = unwrapped.contextInfo?.stanzaId;
+
+      // KASUS 1: User me-REPLY pesan tertentu dengan .ghost / .edit
+      if (quotedStanzaId) {
+        const targetMsg = this.getTrackedOrDeletedMessage(quotedStanzaId);
+
+        if (targetMsg) {
+          await this.sendGhostMessageReport(remoteJid, targetMsg, msg);
+          dbManager.recordUserCommand(senderPhone, senderJid, 'ghost');
+          dbManager.addLog(
+            'bot',
+            `Admin+ +${senderPhone} me-reveal histori pesan (id: ${quotedStanzaId}) via reply .ghost di ${remoteJid}`
+          );
+          return;
+        } else {
+          // Jika tidak ditemukan di memori bot, periksa apakah ada teks di quotedMessage
+          const quotedContent = unwrapped.contextInfo?.quotedMessage;
+          if (quotedContent) {
+            const unwrappedQuoted = this.unwrapMessage(quotedContent);
+            if (unwrappedQuoted.text) {
+              const qParticipant = unwrapped.contextInfo?.participant || '';
+              const qPhone = this.resolvePhone(qParticipant) || extractPhoneFromJid(qParticipant);
+              const { displayTag, mentionJids } = this.formatUserDisplayTag(qParticipant, qPhone);
+              await (this.sock as any).sendMessage(
+                remoteJid,
+                {
+                  text: `${unwrappedQuoted.text}\n\nPesan oleh ${displayTag} (Pesan sebelum bot online / tidak ada riwayat editan tersimpan)`,
+                  mentions: mentionJids,
+                },
+                { quoted: msg }
+              );
+              return;
+            }
+          }
+
+          await (this.sock as any).sendMessage(
+            remoteJid,
+            { text: 'Pesan yang Anda reply tidak ditemukan dalam riwayat pelacakan bot.' },
+            { quoted: msg }
+          );
+          return;
+        }
+      }
+
+      // KASUS 2: User memanggil .ghost tanpa reply (misal .ghost @user di grup atau .ghost di pribadi)
+      let targetPhone = '';
+      let targetJid = '';
+
+      if (isGroup) {
+        const mentions = unwrapped.contextInfo?.mentionedJid || [];
+        if (mentions.length > 0) {
+          targetJid = mentions[0];
+          targetPhone = this.resolvePhone(targetJid);
+        } else {
+          const digits = rawArg.replace(/[^0-9]/g, '');
+          if (digits.length >= 8) {
+            targetPhone = digits;
+            targetJid = `${digits}@s.whatsapp.net`;
+          }
+        }
+      }
+
+      // ISOLASI KETAT: Hanya cari pesan terhapus atau diedit yang berasal dari remoteJid INI
+      // 1. Ambil dari deletedMessagesList yang sesuai remoteJid
+      const deletedInChat = this.deletedMessagesList.filter((d) => d.remoteJid === remoteJid);
+
+      // 2. Ambil dari trackedMessagesMap yang pernah diedit (isEdited) di remoteJid ini
+      const editedInChat: TrackedMessage[] = [];
+      for (const m of this.trackedMessagesMap.values()) {
+        if (m.remoteJid === remoteJid && (m.isEdited || (m.editHistory && m.editHistory.length > 0))) {
+          if (!deletedInChat.some((d) => d.id === m.id)) {
+            editedInChat.push(m);
+          }
+        }
+      }
+
+      // Gabungkan kandidat pesan (terhapus dan/atau diedit)
+      const allCandidateList = [...deletedInChat, ...editedInChat];
+
+      let targetList: TrackedMessage[] = [];
+      if (isGroup && targetPhone) {
+        targetList = allCandidateList.filter((d) => {
+          const p = d.senderPhone || this.resolvePhone(d.senderJid);
+          return p === targetPhone || d.senderJid === targetJid;
+        });
+      } else {
+        // Di chat pribadi atau di grup tanpa tag: ambil seluruh pesan di percakapan ini
+        targetList = allCandidateList;
+      }
+
+      // Jika belum ada pesan yang terhapus atau diedit: hening (jangan balas apapun)
+      if (targetList.length === 0) {
+        return;
+      }
+
+      // Ambil hingga 5 pesan terakhir secara kronologis (paling lama ke paling baru)
+      const itemsToShow = targetList.slice(0, 5).reverse();
+
+      for (let idx = 0; idx < itemsToShow.length; idx++) {
+        await this.sendGhostMessageReport(remoteJid, itemsToShow[idx], msg);
+        if (idx < itemsToShow.length - 1) {
+          await new Promise((r) => setTimeout(r, 500));
+        }
+      }
+
+      dbManager.recordUserCommand(senderPhone, senderJid, 'ghost');
+      dbManager.addLog(
+        'bot',
+        `Admin+ +${senderPhone} mengambil ${itemsToShow.length} pesan terhapus/diedit via .ghost di ${remoteJid}`
+      );
+    } catch (err: any) {
+      console.error('[WA] Gagal memproses .ghost:', err);
+    }
+  }
+
+  /**
+   * Command .ghostclear implementation:
+   * Membersihkan histori pesan terhapus dan riwayat editan di grup atau chat pribadi.
+   * - Di pribadi: membersihkan semua histori chat pribadi tersebut.
+   * - Di grup dengan tag @user: membersihkan histori user tersebut di grup.
+   * - Di grup tanpa tag: membersihkan histori seluruh member di grup tersebut.
+   * Respon ke chat: Hening tanpa balasan (bersih).
+   */
+  private async handleGhostClearCommand(
     msg: WAMessage,
     remoteJid: string,
     senderJid: string,
@@ -2396,12 +2986,12 @@ export class WhatsAppService {
         const mentions = unwrapped.contextInfo?.mentionedJid || [];
         if (mentions.length > 0) {
           targetJid = mentions[0];
-          targetPhone = extractPhoneFromJid(targetJid);
+          targetPhone = this.resolvePhone(targetJid);
         } else {
           const quotedParticipant = unwrapped.contextInfo?.participant;
           if (quotedParticipant) {
             targetJid = this.lidToPhoneMap.get(quotedParticipant) || quotedParticipant;
-            targetPhone = extractPhoneFromJid(targetJid);
+            targetPhone = this.resolvePhone(targetJid);
           } else {
             const digits = rawArg.replace(/[^0-9]/g, '');
             if (digits.length >= 8) {
@@ -2410,165 +3000,84 @@ export class WhatsAppService {
             }
           }
         }
-      } else {
-        // In private chat: automatically targets the other person
-        targetJid = remoteJid;
-        targetPhone = extractPhoneFromJid(remoteJid);
       }
 
-      // Find ALL deleted messages for this user/chat
-      let targetDeletedList: TrackedMessage[] = [];
-
-      if (targetPhone) {
-        targetDeletedList = this.deletedMessagesList.filter((d) => {
-          const isPhoneMatch = d.senderPhone === targetPhone;
-          const isJidMatch = d.senderJid === targetJid || d.remoteJid === targetJid;
-          const isScopeMatch = isGroup ? d.remoteJid === remoteJid : true;
-          return (isPhoneMatch || isJidMatch) && isScopeMatch;
+      if (isGroup && targetPhone) {
+        // Hapus histori user tertentu di grup ini
+        this.deletedMessagesList = this.deletedMessagesList.filter((d) => {
+          const p = d.senderPhone || this.resolvePhone(d.senderJid);
+          return !(d.remoteJid === remoteJid && (p === targetPhone || d.senderJid === targetJid));
         });
-      } else if (isGroup) {
-        // If .ghost without tag in group, find all deleted messages in this group
-        targetDeletedList = this.deletedMessagesList.filter((d) => d.remoteJid === remoteJid);
-      }
-
-      if (targetDeletedList.length === 0) {
-        const notFoundText = isGroup && targetPhone
-          ? `Tidak ditemukan pesan terhapus dari @${targetPhone} di grup ini.`
-          : isGroup
-          ? 'Belum ada pesan terhapus yang tercatat di grup ini. Gunakan: .ghost @tag_user'
-          : 'Tidak ada pesan terhapus yang tercatat dalam percakapan pribadi ini.';
-
-        await (this.sock as any).sendMessage(
-          remoteJid,
-          {
-            text: notFoundText,
-            mentions: targetPhone ? [`${targetPhone}@s.whatsapp.net`] : undefined,
-          },
-          { quoted: msg }
+        for (const [id, m] of this.trackedMessagesMap.entries()) {
+          const p = m.senderPhone || this.resolvePhone(m.senderJid);
+          if (m.remoteJid === remoteJid && (p === targetPhone || m.senderJid === targetJid)) {
+            m.isDeleted = false;
+            m.isEdited = false;
+            m.editHistory = [];
+          }
+        }
+        dbManager.addLog(
+          'bot',
+          `Admin+ +${senderPhone} membersihkan histori pesan terhapus & editan user +${targetPhone} di ${remoteJid}`
         );
-        return;
-      }
-
-      // Take up to 10 deleted messages and sort in chronological order (oldest to newest)
-      const itemsToShow = targetDeletedList.slice(0, 10).reverse();
-
-      // Send header if multiple deleted messages exist
-      if (itemsToShow.length > 1) {
-        const whoStr = targetPhone ? `@${targetPhone}` : 'grup ini';
-        await (this.sock as any).sendMessage(
-          remoteJid,
-          {
-            text: `*DAFTAR PESAN TERHAPUS (.ghost)*\nTotal ditemukan: ${itemsToShow.length} pesan terhapus dari ${whoStr}.\nMenampilkan semua pesan berikut:`,
-            mentions: targetPhone ? [`${targetPhone}@s.whatsapp.net`] : undefined,
-          },
-          { quoted: msg }
+      } else {
+        // Hapus histori seluruh anggota di grup ini atau di chat pribadi ini
+        this.deletedMessagesList = this.deletedMessagesList.filter((d) => d.remoteJid !== remoteJid);
+        for (const [id, m] of this.trackedMessagesMap.entries()) {
+          if (m.remoteJid === remoteJid) {
+            m.isDeleted = false;
+            m.isEdited = false;
+            m.editHistory = [];
+          }
+        }
+        dbManager.addLog(
+          'bot',
+          `Admin+ +${senderPhone} membersihkan seluruh histori pesan terhapus & editan di ${remoteJid}`
         );
       }
 
-      for (let idx = 0; idx < itemsToShow.length; idx++) {
-        const targetDeleted = itemsToShow[idx];
-        const numLabel = itemsToShow.length > 1 ? `[Pesan ${idx + 1} dari ${itemsToShow.length}]\n` : '';
-
-        // Format readers list
-        let readersText = '- Belum ada pembaca tercatat sebelum pesan dihapus';
-        if (targetDeleted.readBy && targetDeleted.readBy.length > 0) {
-          readersText = targetDeleted.readBy
-            .map((r) => `@${r.phone} (${r.name || 'User'})`)
-            .join(', ');
-        }
-
-        const sentTimeStr = formatWib(targetDeleted.createdAt);
-        const deleteTimeStr = targetDeleted.deletedAt ? formatWib(targetDeleted.deletedAt) : 'Baru saja';
-        const cleanContent = targetDeleted.text || targetDeleted.mediaCaption || '(Pesan media tanpa caption)';
-
-        const mentionsList: string[] = [];
-        if (targetDeleted.senderPhone) {
-          mentionsList.push(`${targetDeleted.senderPhone}@s.whatsapp.net`);
-        }
-        if (targetDeleted.readBy) {
-          for (const r of targetDeleted.readBy) {
-            const rJid = `${r.phone}@s.whatsapp.net`;
-            if (!mentionsList.includes(rJid)) {
-              mentionsList.push(rJid);
-            }
-          }
-        }
-
-        const reportText =
-          `*PESAN TERHAPUS (.ghost)*\n${numLabel}` +
-          `Pengirim: @${targetDeleted.senderPhone}\n` +
-          `Waktu Kirim: ${sentTimeStr}\n` +
-          `Waktu Dihapus: ${deleteTimeStr}\n` +
-          `Sudah Dibaca Oleh: ${readersText}\n\n` +
-          `*Isi Pesan:*\n${cleanContent}`;
-
-        if (targetDeleted.mediaBuffer && targetDeleted.mediaType && targetDeleted.mediaType !== 'text') {
-          if (targetDeleted.mediaType === 'image') {
-            await (this.sock as any).sendMessage(
-              remoteJid,
-              {
-                image: targetDeleted.mediaBuffer,
-                caption: reportText,
-                mentions: mentionsList,
-              },
-              { quoted: msg }
-            );
-          } else if (targetDeleted.mediaType === 'video') {
-            await (this.sock as any).sendMessage(
-              remoteJid,
-              {
-                video: targetDeleted.mediaBuffer,
-                caption: reportText,
-                mentions: mentionsList,
-              },
-              { quoted: msg }
-            );
-          } else if (targetDeleted.mediaType === 'audio') {
-            await (this.sock as any).sendMessage(
-              remoteJid,
-              {
-                text: reportText,
-                mentions: mentionsList,
-              },
-              { quoted: msg }
-            );
-            await (this.sock as any).sendMessage(
-              remoteJid,
-              {
-                audio: targetDeleted.mediaBuffer,
-                mimetype: 'audio/mp4',
-                ptt: true,
-              },
-              { quoted: msg }
-            );
-          }
-        } else {
-          await (this.sock as any).sendMessage(
-            remoteJid,
-            {
-              text: reportText,
-              mentions: mentionsList,
-            },
-            { quoted: msg }
-          );
-        }
-
-        // Small interval if multiple messages
-        if (idx < itemsToShow.length - 1) {
-          await new Promise((r) => setTimeout(r, 600));
-        }
-      }
-
-      dbManager.recordUserCommand(senderPhone, senderJid, 'ghost');
-      dbManager.addLog(
-        'bot',
-        `Admin+ +${senderPhone} mengambil ${itemsToShow.length} pesan terhapus menggunakan .ghost`
-      );
+      // Hening tanpa respon balasan teks ke WhatsApp (bersih)
     } catch (err: any) {
-      console.error('[WA] Gagal memproses .ghost:', err);
+      console.error('[WA] Gagal memproses .ghostclear:', err);
+    }
+  }
+
+  /**
+   * Command .cleardata implementation:
+   * Membersihkan semua histori chat, pesan terhapus di memori, berkas media sementara,
+   * dan analitik web server agar tidak memenuhi penyimpanan server.
+   */
+  private async handleClearDataCommand(
+    msg: WAMessage,
+    remoteJid: string,
+    senderJid: string,
+    senderPhone: string
+  ): Promise<void> {
+    try {
+      // 1. Bersihkan database web dan file temp di server
+      const result = dbManager.clearWebData();
+
+      // 2. Kosongkan pelacakan memori aktif
+      this.trackedMessagesMap.clear();
+      this.deletedMessagesList = [];
+      this.editIdToTargetIdMap.clear();
+
+      dbManager.addLog(
+        'system',
+        `Admin+ +${senderPhone} menjalankan .cleardata: seluruh histori web dan ${result.deletedFilesCount} file media dibersihkan.`
+      );
+
+      // Balasan ringkas ke Admin+
       await (this.sock as any).sendMessage(
         remoteJid,
-        { text: `Gagal memproses pesan terhapus: ${err?.message || 'Error internal'}` },
+        { text: 'Histori chat dan penyimpanan data web berhasil dibersihkan.' },
+        { quoted: msg }
+      );
+    } catch (err: any) {
+      console.error('[WA] Gagal memproses .cleardata:', err);
+      await (this.sock as any).sendMessage(
+        remoteJid,
+        { text: `Gagal membersihkan data web: ${err?.message || 'Error internal'}` },
         { quoted: msg }
       );
     }
