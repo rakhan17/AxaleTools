@@ -114,6 +114,7 @@ export class WhatsAppService {
   private static instance: WhatsAppService;
   public sock: any = null;
   private authFolder: string;
+  private sessionRootDir: string;
   public currentSessionId: string = 'session_default';
   public pairingCode: string | null = null;
   public status: 'disconnected' | 'connecting' | 'qr_ready' | 'syncing' | 'connected' = 'disconnected';
@@ -141,15 +142,33 @@ export class WhatsAppService {
   private groupSyncPromise: Promise<void> | null = null;
   private groupSyncCooldownMs = 25000;
 
+  private ensureDirectory(dirPath: string): void {
+    if (!fs.existsSync(dirPath)) {
+      fs.mkdirSync(dirPath, { recursive: true });
+    }
+  }
+
+  private resolveSessionRootDir(): string {
+    const configured = (process.env.WA_SESSIONS_PATH || '').trim();
+    const preferredRoot = configured
+      ? (path.isAbsolute(configured) ? configured : path.resolve(process.cwd(), configured))
+      : '/data/wa_sessions';
+
+    try {
+      this.ensureDirectory(preferredRoot);
+      return preferredRoot;
+    } catch (err) {
+      const fallbackRoot = path.resolve(process.cwd(), 'wa_sessions');
+      this.ensureDirectory(fallbackRoot);
+      console.warn(`[WA] Gagal pakai WA_SESSIONS_PATH "${preferredRoot}", fallback ke "${fallbackRoot}"`, err);
+      return fallbackRoot;
+    }
+  }
+
   public getSessionFolder(sessionId: string): string {
-    const rootDir = path.resolve(process.cwd(), 'wa_sessions');
-    if (!fs.existsSync(rootDir)) {
-      fs.mkdirSync(rootDir, { recursive: true });
-    }
-    const sessionDir = path.join(rootDir, sessionId);
-    if (!fs.existsSync(sessionDir)) {
-      fs.mkdirSync(sessionDir, { recursive: true });
-    }
+    this.ensureDirectory(this.sessionRootDir);
+    const sessionDir = path.join(this.sessionRootDir, sessionId);
+    this.ensureDirectory(sessionDir);
     return sessionDir;
   }
 
@@ -235,6 +254,7 @@ export class WhatsAppService {
 
   private constructor() {
     this.currentSessionId = dbManager.getActiveSessionId() || 'session_default';
+    this.sessionRootDir = this.resolveSessionRootDir();
 
     this.authFolder = this.getSessionFolder(this.currentSessionId);
     // Pre-hydrate cache from disk immediately to eliminate 0-group/0-contact lag
