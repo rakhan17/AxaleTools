@@ -148,6 +148,14 @@ export class WhatsAppService {
     }
   }
 
+  private sanitizeSessionId(sessionId: string): string {
+    const normalized = (sessionId || '').trim();
+    if (!/^[a-zA-Z0-9_-]+$/.test(normalized)) {
+      throw new Error('Session ID tidak valid');
+    }
+    return normalized;
+  }
+
   private resolveSessionRootDir(): string {
     const configured = (process.env.WA_SESSIONS_PATH || '').trim();
     const preferredRoot = configured
@@ -166,8 +174,13 @@ export class WhatsAppService {
   }
 
   public getSessionFolder(sessionId: string): string {
+    const safeSessionId = this.sanitizeSessionId(sessionId);
     this.ensureDirectory(this.sessionRootDir);
-    const sessionDir = path.join(this.sessionRootDir, sessionId);
+    const sessionDir = path.join(this.sessionRootDir, safeSessionId);
+    const relative = path.relative(this.sessionRootDir, sessionDir);
+    if (relative.startsWith('..') || path.isAbsolute(relative)) {
+      throw new Error('Path sesi tidak valid');
+    }
     this.ensureDirectory(sessionDir);
     return sessionDir;
   }
