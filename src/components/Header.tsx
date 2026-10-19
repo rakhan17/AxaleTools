@@ -1,9 +1,9 @@
-import { Users, Send, Settings, BarChart3, Smartphone } from 'lucide-react';
+import { Users, Send, Settings, BarChart3, Smartphone, AtSign, BookOpen } from 'lucide-react';
 import { SystemStatus } from '../types.ts';
 
 interface HeaderProps {
-  currentTab: 'radar' | 'broadcast' | 'analytics' | 'settings';
-  onSelectTab: (tab: 'radar' | 'broadcast' | 'analytics' | 'settings') => void;
+  currentTab: 'radar' | 'hidetag' | 'features' | 'broadcast' | 'analytics' | 'settings';
+  onSelectTab: (tab: 'radar' | 'hidetag' | 'features' | 'broadcast' | 'analytics' | 'settings') => void;
   status: SystemStatus | null;
 }
 
@@ -52,7 +52,7 @@ export default function Header({ currentTab, onSelectTab, status }: HeaderProps)
             )}
           </div>
 
-          {/* Navigation Bar (Horizontally scrollable on mobile with min 44px touch targets) */}
+          {/* Navigation Bar */}
           <nav className="flex items-center space-x-1 overflow-x-auto pb-1 sm:pb-0 scrollbar-none text-xs font-mono -mx-2 px-2 sm:mx-0 sm:px-0">
             <button
               onClick={() => onSelectTab('radar')}
@@ -64,6 +64,30 @@ export default function Header({ currentTab, onSelectTab, status }: HeaderProps)
             >
               <Users className="w-4 h-4 flex-shrink-0" />
               <span>Radar <span className="hidden md:inline">&amp; Grup</span></span>
+            </button>
+
+            <button
+              onClick={() => onSelectTab('hidetag')}
+              className={`min-h-[44px] px-3 py-2 transition-colors flex items-center space-x-1.5 whitespace-nowrap flex-shrink-0 ${
+                currentTab === 'hidetag'
+                  ? 'border-b-2 border-black text-black font-bold'
+                  : 'text-neutral-500 hover:text-black'
+              }`}
+            >
+              <AtSign className="w-4 h-4 flex-shrink-0" />
+              <span>Hidetag <span className="hidden md:inline">Web</span></span>
+            </button>
+
+            <button
+              onClick={() => onSelectTab('features')}
+              className={`min-h-[44px] px-3 py-2 transition-colors flex items-center space-x-1.5 whitespace-nowrap flex-shrink-0 ${
+                currentTab === 'features'
+                  ? 'border-b-2 border-black text-black font-bold'
+                  : 'text-neutral-500 hover:text-black'
+              }`}
+            >
+              <BookOpen className="w-4 h-4 flex-shrink-0" />
+              <span>Katalog Fitur</span>
             </button>
 
             <button
@@ -90,7 +114,6 @@ export default function Header({ currentTab, onSelectTab, status }: HeaderProps)
               <span>Analitik</span>
             </button>
 
-            {/* TAB PALING KANAN: Pengaturan Umum */}
             <button
               onClick={() => onSelectTab('settings')}
               className={`min-h-[44px] px-3 py-2 transition-colors flex items-center space-x-1.5 whitespace-nowrap flex-shrink-0 ${
@@ -100,7 +123,7 @@ export default function Header({ currentTab, onSelectTab, status }: HeaderProps)
               }`}
             >
               <Settings className="w-4 h-4 flex-shrink-0" />
-              <span>Pengaturan <span className="hidden md:inline">Umum</span></span>
+              <span>Pengaturan</span>
             </button>
           </nav>
         </div>

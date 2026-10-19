@@ -14,6 +14,7 @@ import fs from 'fs';
 import path from 'path';
 import { dbManager, extractPhoneFromJid, normalizePhone } from './db.ts';
 import { resolveSwgcColor, SWGC_COLOR_PRESETS } from './swgcColors.ts';
+import { convertMediaToWebpSticker } from './sticker.ts';
 
 export interface WAContact {
   id: string; // JID
@@ -199,9 +200,11 @@ export class WhatsAppService {
         groups: Array.from(this.groups.values()),
         contacts: Array.from(this.contacts.values()),
         activeStories: this.activeGroupStories,
+        lidMappings: Array.from(this.lidToPhoneMap.entries()),
         savedAt: Date.now(),
       };
       fs.writeFileSync(cachePath, JSON.stringify(data, null, 2), 'utf-8');
+      dbManager.saveBatchLidMappings(Array.from(this.lidToPhoneMap.entries()));
     } catch (err) {
       console.warn(`[WA Cache] Gagal menyimpan cache sesi ${sessionId}:`, err);
     }
@@ -215,6 +218,12 @@ export class WhatsAppService {
     this.avatarCache.clear();
     this.lidToPhoneMap.clear();
     this.editIdToTargetIdMap.clear();
+
+    // Pre-populate lidToPhoneMap from database so admin identification is never broken!
+    const dbMappings = dbManager.getLidMappings();
+    for (const [k, v] of Object.entries(dbMappings)) {
+      if (k && v) this.lidToPhoneMap.set(k, v);
+    }
 
     const sessInfo = dbManager.getSessions().find((s) => s.id === sessionId);
     if (sessInfo && sessInfo.phone) {
@@ -257,7 +266,12 @@ export class WhatsAppService {
       if (data && Array.isArray(data.activeStories)) {
         this.activeGroupStories = data.activeStories;
       }
-      console.log(`[WA Cache] Cache sesi ${sessionId} berhasil dimuat: ${this.groups.size} grup, ${this.contacts.size} kontak.`);
+      if (data && Array.isArray(data.lidMappings)) {
+        for (const [k, v] of data.lidMappings) {
+          if (k && v) this.lidToPhoneMap.set(k, v);
+        }
+      }
+      console.log(`[WA Cache] Cache sesi ${sessionId} berhasil dimuat: ${this.groups.size} grup, ${this.contacts.size} kontak, ${this.lidToPhoneMap.size} LID.`);
       return true;
     } catch (err) {
       console.warn(`[WA Cache] Gagal membaca cache sesi ${sessionId}:`, err);
@@ -1083,10 +1097,11 @@ export class WhatsAppService {
    * Handles fromMe: true, phone JIDs, WhatsApp LIDs, and participant mapping
    */
   private isMessageFromAdmin(msg: WAMessage): { isAdmin: boolean; senderPhone: string; senderJid: string } {
-    const myJid = (this.sock as any).user?.id
+    const myJid = (this.sock as any)?.user?.id
       ? (this.sock as any).user.id.split(':')[0] + '@s.whatsapp.net'
-      : '';
-    const myPhone = extractPhoneFromJid(myJid);
+      : (this.botUser?.id || '');
+    const myPhone = extractPhoneFromJid(myJid) || this.botUser?.phone || '';
+    const myLid = (this.sock as any)?.user?.lid;
 
     // 1. If sent from the connected bot's own WhatsApp session (fromMe === true), ALWAYS recognized as Admin+
     if (msg.key.fromMe) {
@@ -1095,6 +1110,7 @@ export class WhatsAppService {
 
     const adminNumbers = dbManager.getAdminNumbers();
     const normalizedAdmins = new Set(adminNumbers.map((n) => normalizePhone(n)));
+    if (myPhone) normalizedAdmins.add(normalizePhone(myPhone));
 
     // 2. Gather all possible participant / sender identifiers
     const rawCandidates: (string | undefined | null)[] = [
@@ -1109,6 +1125,15 @@ export class WhatsAppService {
 
     for (const raw of rawCandidates) {
       if (!raw) continue;
+
+      // If matches bot's own LID or JID
+      if (myLid && raw === myLid) {
+        return { isAdmin: true, senderPhone: myPhone, senderJid: myJid };
+      }
+      if (myJid && raw === myJid) {
+        return { isAdmin: true, senderPhone: myPhone, senderJid: myJid };
+      }
+
       const cleanPhone = extractPhoneFromJid(raw);
       if (cleanPhone && (adminNumbers.includes(cleanPhone) || normalizedAdmins.has(normalizePhone(cleanPhone)))) {
         return { isAdmin: true, senderPhone: cleanPhone, senderJid: raw };
@@ -1149,6 +1174,7 @@ export class WhatsAppService {
     const participantAlt = (msg.key as any)?.participantAlt || (msg as any)?.authorPn;
     if (participant && participantAlt) {
       this.lidToPhoneMap.set(participant, participantAlt);
+      dbManager.saveBatchLidMappings([[participant, participantAlt]]);
     }
 
     const remoteJid = msg.key.remoteJid || '';
@@ -1171,12 +1197,7 @@ export class WhatsAppService {
       timestamp: msgTimestamp,
     });
 
-    // Check if bot feature is enabled for this active account session
-    if (!dbManager.isSessionBotEnabled(this.currentSessionId)) {
-      return;
-    }
-
-    // Strict Admin+ check
+    // Strict Admin+ check first
     const adminCheck = this.isMessageFromAdmin(msg);
     if (!adminCheck.isAdmin) {
       return;
@@ -1195,44 +1216,7 @@ export class WhatsAppService {
     const cleanCmd = matchPrefix ? matchPrefix[1].trim() : trimmed;
     const lowerCmd = cleanCmd.toLowerCase();
 
-    // Master General / Global Bot command handling (can be toggled by Admin+)
-    if (
-      lowerCmd === 'bot general on' ||
-      lowerCmd === 'bot master on' ||
-      lowerCmd === 'nyalakan bot general' ||
-      lowerCmd === 'nyalakan bot global' ||
-      lowerCmd === 'bot global on'
-    ) {
-      dbManager.setGlobalBotEnabled(true);
-      await (this.sock as any).sendMessage(
-        remoteJid,
-        { text: 'Master Bot WhatsApp berhasil DIAKTIFKAN kembali secara menyeluruh.' },
-        { quoted: msg }
-      );
-      return;
-    }
-
-    if (
-      lowerCmd === 'bot general off' ||
-      lowerCmd === 'bot master off' ||
-      lowerCmd === 'matikan bot general' ||
-      lowerCmd === 'matikan bot global' ||
-      lowerCmd === 'bot global off'
-    ) {
-      dbManager.setGlobalBotEnabled(false);
-      await (this.sock as any).sendMessage(
-        remoteJid,
-        { text: 'Master Bot WhatsApp berhasil DINONAKTIFKAN secara menyeluruh. Ketik .bot general on untuk menyalakan kembali.' },
-        { quoted: msg }
-      );
-      return;
-    }
-
-    // Check Master Global Bot Switch: if off, ignore all other commands
-    if (!dbManager.isGlobalBotEnabled()) {
-      return;
-    }
-
+    // Check BOT ON commands BEFORE checking disable flags, so user can always turn the bot back ON!
     const isBotOnCmd =
       lowerCmd === 'bot on' ||
       lowerCmd === 'bot enable' ||
@@ -1240,7 +1224,12 @@ export class WhatsAppService {
       lowerCmd === 'bot 1' ||
       lowerCmd === 'nyalakan bot' ||
       lowerCmd === 'bot aktif' ||
-      lowerCmd === 'aktifkan bot';
+      lowerCmd === 'aktifkan bot' ||
+      lowerCmd === 'bot general on' ||
+      lowerCmd === 'bot master on' ||
+      lowerCmd === 'nyalakan bot general' ||
+      lowerCmd === 'nyalakan bot global' ||
+      lowerCmd === 'bot global on';
 
     const isBotOffCmd =
       lowerCmd === 'bot off' ||
@@ -1249,38 +1238,47 @@ export class WhatsAppService {
       lowerCmd === 'bot 0' ||
       lowerCmd === 'matikan bot' ||
       lowerCmd === 'bot nonaktif' ||
-      lowerCmd === 'nonaktifkan bot';
+      lowerCmd === 'nonaktifkan bot' ||
+      lowerCmd === 'bot general off' ||
+      lowerCmd === 'bot master off' ||
+      lowerCmd === 'matikan bot general' ||
+      lowerCmd === 'matikan bot global' ||
+      lowerCmd === 'bot global off';
 
-    // Check per-group bot enable/disable status
-    if (isGroup && !dbManager.isGroupBotEnabled(remoteJid)) {
-      if (isBotOnCmd) {
+    const activeSessionId = this.currentSessionId || dbManager.getActiveSessionId() || 'session_default';
+
+    if (isBotOnCmd) {
+      dbManager.setGlobalBotEnabled(true);
+      dbManager.setSessionBotEnabled(activeSessionId, true);
+      if (isGroup) {
         dbManager.setGroupBotEnabled(remoteJid, true);
-        await (this.sock as any).sendMessage(
-          remoteJid,
-          { text: 'Fitur bot berhasil diaktifkan kembali untuk grup ini.' },
-          { quoted: msg }
-        );
       }
+      dbManager.addLog('system', `Bot dinyalakan kembali oleh Admin+ +${senderPhone} di ${remoteJid}`);
+      return; // Silent per user instructions (no spam in chat)
+    }
+
+    if (isBotOffCmd) {
+      if (lowerCmd.includes('general') || lowerCmd.includes('global') || lowerCmd.includes('master')) {
+        dbManager.setGlobalBotEnabled(false);
+      } else if (isGroup) {
+        dbManager.setGroupBotEnabled(remoteJid, false);
+      } else {
+        dbManager.setSessionBotEnabled(activeSessionId, false);
+      }
+      dbManager.addLog('system', `Bot dinonaktifkan oleh Admin+ +${senderPhone} di ${remoteJid}`);
+      return; // Silent per user instructions (no spam in chat)
+    }
+
+    // Now check if global bot or session bot or group bot is turned OFF
+    if (!dbManager.isGlobalBotEnabled()) {
       return;
     }
 
-    if (isGroup && isBotOffCmd) {
-      dbManager.setGroupBotEnabled(remoteJid, false);
-      await (this.sock as any).sendMessage(
-        remoteJid,
-        { text: 'Fitur bot dinonaktifkan untuk grup ini. Ketik .bot on untuk mengaktifkan kembali.' },
-        { quoted: msg }
-      );
+    if (!dbManager.isSessionBotEnabled(activeSessionId)) {
       return;
     }
 
-    if (isGroup && isBotOnCmd) {
-      dbManager.setGroupBotEnabled(remoteJid, true);
-      await (this.sock as any).sendMessage(
-        remoteJid,
-        { text: 'Fitur bot sudah aktif untuk grup ini.' },
-        { quoted: msg }
-      );
+    if (isGroup && !dbManager.isGroupBotEnabled(remoteJid)) {
       return;
     }
 
@@ -1341,13 +1339,47 @@ export class WhatsAppService {
       return;
     }
 
-    // 7. Command .promote @tag / .promote me
+    // 7. Command .h (Hidetag: Tag seluruh anggota grup tanpa terlihat)
+    if (
+      lowerCmd === 'h' ||
+      lowerCmd.startsWith('h ') ||
+      lowerCmd.startsWith('h\n') ||
+      lowerCmd === 'hidetag' ||
+      lowerCmd.startsWith('hidetag ') ||
+      lowerCmd.startsWith('hidetag\n')
+    ) {
+      let cleanText = '';
+      if (lowerCmd === 'h') {
+        cleanText = '';
+      } else if (lowerCmd.startsWith('hidetag')) {
+        cleanText = cleanCmd.slice(7).trim();
+      } else if (lowerCmd.startsWith('h')) {
+        cleanText = cleanCmd.slice(1).trim();
+      }
+      await this.handleHidetagCommand(msg, remoteJid, senderJid, senderPhone, cleanText);
+      return;
+    }
+
+    // 8. Command .s / .sticker (Pembuat Stiker Gambar/Video)
+    if (
+      lowerCmd === 's' ||
+      lowerCmd.startsWith('s ') ||
+      lowerCmd.startsWith('s\n') ||
+      lowerCmd === 'sticker' ||
+      lowerCmd.startsWith('sticker ') ||
+      lowerCmd.startsWith('sticker\n')
+    ) {
+      await this.handleStickerCommand(msg, remoteJid, senderJid, senderPhone);
+      return;
+    }
+
+    // 9. Command .promote @tag / .promote me
     if (lowerCmd.startsWith('promote')) {
       await this.handlePromoteCommand(msg, remoteJid, senderJid, senderPhone, cleanCmd);
       return;
     }
 
-    // 8. Command .demote @tag / .demote me
+    // 10. Command .demote @tag / .demote me
     if (lowerCmd.startsWith('demote')) {
       await this.handleDemoteCommand(msg, remoteJid, senderJid, senderPhone, cleanCmd);
       return;
@@ -1369,11 +1401,7 @@ export class WhatsAppService {
       const quoted = unwrappedMsg.contextInfo?.quotedMessage;
 
       if (!quoted) {
-        await (this.sock as any).sendMessage(
-          remoteJid,
-          { text: 'Mohon reply pesan View Once (sekali lihat) dengan perintah .rvo' },
-          { quoted: msg }
-        );
+        dbManager.addLog('rvo', `Panggilan .rvo oleh +${senderPhone} di ${remoteJid} tanpa reply media view-once.`);
         return;
       }
 
@@ -1398,11 +1426,7 @@ export class WhatsAppService {
       }
 
       if (!viewOnceMedia || (!isImage && !isVideo && !isAudio)) {
-        await (this.sock as any).sendMessage(
-          remoteJid,
-          { text: 'Pesan yang Anda reply bukan media View Once (sekali lihat).' },
-          { quoted: msg }
-        );
+        dbManager.addLog('rvo', `Panggilan .rvo oleh +${senderPhone} pada pesan bukan View Once.`);
         return;
       }
 
@@ -1420,11 +1444,7 @@ export class WhatsAppService {
       const buffer = (await downloadMediaMessage(mediaContext, 'buffer', {})) as Buffer;
 
       if (!buffer || buffer.length === 0) {
-        await (this.sock as any).sendMessage(
-          remoteJid,
-          { text: 'Gagal mengunduh media View Once.' },
-          { quoted: msg }
-        );
+        dbManager.addLog('rvo', `Gagal mengunduh media View Once (+${senderPhone} di ${remoteJid}).`);
         return;
       }
 
@@ -1918,12 +1938,323 @@ export class WhatsAppService {
       );
     } catch (err: any) {
       console.error('[WA] Gagal mengeksekusi .demote:', err);
+      dbManager.addLog('bot', `Gagal .demote: ${err?.message || 'Error internal'}`);
+    }
+  }
+
+  /**
+   * Command .h implementation:
+   * Hidetag: sends message to group with ALL participants tagged invisibly in mentions.
+   * If sent with text .h <pesan>: deletes the trigger bubble (if possible) and sends clean message with mentions.
+   * If sent with media caption .h <caption opsional>: sends media with clean caption and mentions.
+   * If sent as a reply to another message with .h: reposts that quoted message with mentions.
+   * 100% silent on error and success!
+   */
+  private async handleHidetagCommand(
+    msg: WAMessage,
+    remoteJid: string,
+    senderJid: string,
+    senderPhone: string,
+    cleanText: string
+  ): Promise<void> {
+    try {
+      if (!remoteJid.endsWith('@g.us')) {
+        return; // Hidetag only operates in WhatsApp groups
+      }
+
+      // Fetch participants from group metadata
+      // @ts-ignore
+      const meta = await (this.sock as any).groupMetadata(remoteJid);
+      const participants = meta?.participants || [];
+      const mentions = participants.map((p: any) => p.id).filter(Boolean);
+
+      if (mentions.length === 0) {
+        return;
+      }
+
+      const unwrappedMsg = this.unwrapMessage(msg);
+      const quoted = unwrappedMsg.contextInfo?.quotedMessage;
+
+      // Case 1: .h replied to an existing message
+      if (quoted) {
+        const unwrappedQuoted = this.unwrapMessage(quoted);
+        const quotedMedia =
+          unwrappedQuoted.message?.imageMessage ||
+          unwrappedQuoted.message?.videoMessage ||
+          unwrappedQuoted.message?.audioMessage ||
+          unwrappedQuoted.message?.documentMessage ||
+          quoted?.imageMessage ||
+          quoted?.videoMessage ||
+          quoted?.audioMessage ||
+          quoted?.documentMessage;
+
+        if (quotedMedia) {
+          const isImage = !!(unwrappedQuoted.message?.imageMessage || quoted?.imageMessage);
+          const isVideo = !!(unwrappedQuoted.message?.videoMessage || quoted?.videoMessage);
+          const isAudio = !!(unwrappedQuoted.message?.audioMessage || quoted?.audioMessage);
+          const isDoc = !!(unwrappedQuoted.message?.documentMessage || quoted?.documentMessage);
+
+          const mediaContext: any = {
+            key: {
+              remoteJid,
+              id: unwrappedMsg.contextInfo?.stanzaId || msg.key.id,
+              participant: unwrappedMsg.contextInfo?.participant || msg.key.participant,
+            },
+            message: unwrappedQuoted.message || quoted,
+          };
+
+          // @ts-ignore
+          const buffer = (await downloadMediaMessage(mediaContext, 'buffer', {})) as Buffer;
+          if (buffer && buffer.length > 0) {
+            const finalCaption = cleanText || unwrappedQuoted.text || '';
+            const sendOptions: any = { mentions };
+            if (finalCaption) sendOptions.caption = finalCaption;
+
+            if (isImage) {
+              await (this.sock as any).sendMessage(remoteJid, { image: buffer, ...sendOptions });
+            } else if (isVideo) {
+              await (this.sock as any).sendMessage(remoteJid, { video: buffer, ...sendOptions });
+            } else if (isAudio) {
+              await (this.sock as any).sendMessage(remoteJid, { audio: buffer, mimetype: 'audio/mp4', ptt: true, mentions });
+            } else if (isDoc) {
+              await (this.sock as any).sendMessage(remoteJid, {
+                document: buffer,
+                mimetype: unwrappedQuoted.message?.documentMessage?.mimetype || 'application/octet-stream',
+                fileName: unwrappedQuoted.message?.documentMessage?.fileName || 'document',
+                ...sendOptions,
+              });
+            }
+
+            try {
+              await (this.sock as any).sendMessage(remoteJid, { delete: msg.key });
+            } catch {}
+
+            dbManager.recordUserCommand(senderPhone, senderJid, 'hidetag');
+            dbManager.addLog('hidetag', `Hidetag media diteruskan di grup ${meta.subject || remoteJid} (${mentions.length} anggota)`);
+            return;
+          }
+        }
+
+        // Quoted text message
+        const quotedText = cleanText || unwrappedQuoted.text || '';
+        if (quotedText) {
+          await (this.sock as any).sendMessage(remoteJid, { text: quotedText, mentions });
+          try {
+            await (this.sock as any).sendMessage(remoteJid, { delete: msg.key });
+          } catch {}
+          dbManager.recordUserCommand(senderPhone, senderJid, 'hidetag');
+          dbManager.addLog('hidetag', `Hidetag teks diteruskan di grup ${meta.subject || remoteJid} (${mentions.length} anggota)`);
+          return;
+        }
+      }
+
+      // Case 2: .h sent with media directly (e.g. image with caption .h Halo)
+      const currentMedia =
+        unwrappedMsg.message?.imageMessage ||
+        unwrappedMsg.message?.videoMessage ||
+        unwrappedMsg.message?.documentMessage;
+
+      if (currentMedia) {
+        const isImage = !!unwrappedMsg.message?.imageMessage;
+        const isVideo = !!unwrappedMsg.message?.videoMessage;
+        const isDoc = !!unwrappedMsg.message?.documentMessage;
+
+        const mediaContext: any = {
+          key: msg.key,
+          message: unwrappedMsg.message,
+        };
+
+        // @ts-ignore
+        const buffer = (await downloadMediaMessage(mediaContext, 'buffer', {})) as Buffer;
+        if (buffer && buffer.length > 0) {
+          const sendOptions: any = { mentions };
+          if (cleanText) sendOptions.caption = cleanText;
+
+          if (isImage) {
+            await (this.sock as any).sendMessage(remoteJid, { image: buffer, ...sendOptions });
+          } else if (isVideo) {
+            await (this.sock as any).sendMessage(remoteJid, { video: buffer, ...sendOptions });
+          } else if (isDoc) {
+            await (this.sock as any).sendMessage(remoteJid, {
+              document: buffer,
+              mimetype: unwrappedMsg.message?.documentMessage?.mimetype || 'application/octet-stream',
+              fileName: unwrappedMsg.message?.documentMessage?.fileName || 'document',
+              ...sendOptions,
+            });
+          }
+
+          try {
+            await (this.sock as any).sendMessage(remoteJid, { delete: msg.key });
+          } catch {}
+
+          dbManager.recordUserCommand(senderPhone, senderJid, 'hidetag');
+          dbManager.addLog('hidetag', `Hidetag media dikirim di grup ${meta.subject || remoteJid} (${mentions.length} anggota)`);
+          return;
+        }
+      }
+
+      // Case 3: Pure text message .h <pesan>
+      if (!cleanText) {
+        return;
+      }
+
+      // Send the clean message with all group members invisibly tagged in mentions
+      await (this.sock as any).sendMessage(remoteJid, {
+        text: cleanText,
+        mentions,
+      });
+
+      dbManager.recordUserCommand(senderPhone, senderJid, 'hidetag');
+      dbManager.addLog('hidetag', `Hidetag teks "${cleanText.slice(0, 30)}..." dikirim di grup ${meta.subject || remoteJid} (${mentions.length} anggota)`);
+    } catch (err: any) {
+      console.error('[WA] Gagal mengeksekusi .h (hidetag):', err);
+      dbManager.addLog('hidetag', `Gagal hidetag: ${err?.message || 'Error internal'}`);
+    }
+  }
+
+  /**
+   * Command .s / .sticker implementation:
+   * Converts image or video to WhatsApp WebP sticker (static or animated) and sends it.
+   * Can be used by:
+   * - Replying to image/video with .s
+   * - Sending image/video with caption .s
+   * 100% silent on error and success! Sends ONLY the sticker.
+   * Bubble chat is NEVER deleted.
+   */
+  private async handleStickerCommand(
+    msg: WAMessage,
+    remoteJid: string,
+    senderJid: string,
+    senderPhone: string
+  ): Promise<void> {
+    try {
+      const unwrappedMsg = this.unwrapMessage(msg);
+      const quoted = unwrappedMsg.contextInfo?.quotedMessage;
+      const unwrappedQuoted = this.unwrapMessage(quoted);
+
+      let targetMediaMsg =
+        unwrappedQuoted.message?.imageMessage ||
+        unwrappedQuoted.message?.videoMessage ||
+        unwrappedMsg.message?.imageMessage ||
+        unwrappedMsg.message?.videoMessage;
+
+      let isQuoted = !!(unwrappedQuoted.message?.imageMessage || unwrappedQuoted.message?.videoMessage);
+      let isVideo = false;
+
+      if (!targetMediaMsg) {
+        if (quoted?.imageMessage || quoted?.videoMessage) {
+          targetMediaMsg = quoted.imageMessage || quoted.videoMessage;
+          isQuoted = true;
+        }
+      }
+
+      if (!targetMediaMsg) {
+        return; // No media found, silently ignore
+      }
+
+      isVideo = !!(isQuoted
+        ? unwrappedQuoted.message?.videoMessage || quoted?.videoMessage
+        : unwrappedMsg.message?.videoMessage);
+
+      const mediaContext: any = {
+        key: {
+          remoteJid,
+          id: isQuoted ? unwrappedMsg.contextInfo?.stanzaId || msg.key.id : msg.key.id,
+          participant: isQuoted ? unwrappedMsg.contextInfo?.participant || msg.key.participant : msg.key.participant,
+        },
+        message: isQuoted ? (unwrappedQuoted.message || quoted) : unwrappedMsg.message,
+      };
+
+      // @ts-ignore
+      const rawBuffer = (await downloadMediaMessage(mediaContext, 'buffer', {})) as Buffer;
+      if (!rawBuffer || rawBuffer.length === 0) {
+        return;
+      }
+
+      // Read custom sticker metadata (author name and pack name) from web settings
+      const stickerSettings = dbManager.getStickerSettings();
+
+      // Convert to pristine transparent WebP sticker via ffmpeg
+      const stickerBuffer = await convertMediaToWebpSticker(rawBuffer, isVideo, {
+        packName: stickerSettings.packName,
+        authorName: stickerSettings.authorName,
+      });
+      if (!stickerBuffer || stickerBuffer.length === 0) {
+        return;
+      }
+
+      // Send sticker as genuine standalone floating sticker (no quote, no noise)
       await (this.sock as any).sendMessage(
         remoteJid,
-        { text: `Gagal menurunkan jabatan: ${err?.message || 'Error internal'}` },
-        { quoted: msg }
+        { sticker: stickerBuffer }
       );
+
+      // Bubble chat is intentionally kept intact (not deleted)
+      dbManager.recordUserCommand(senderPhone, senderJid, 'sticker');
+      dbManager.addLog('bot', `Stiker (${isVideo ? 'Video/GIF' : 'Foto'}) [Paket: "${stickerSettings.packName}", Author: "${stickerSettings.authorName}"] dikirim untuk +${senderPhone}`);
+    } catch (err: any) {
+      console.error('[WA] Gagal membuat stiker (.s):', err);
+      dbManager.addLog('bot', `Gagal membuat stiker: ${err?.message || 'Error internal'}`);
     }
+  }
+
+  /**
+   * Send Hidetag directly from Web Dashboard to one or multiple groups
+   */
+  public async sendHidetagNative(
+    groupIds: string[],
+    payload: {
+      text?: string;
+      mediaBuffer?: Buffer | null;
+      mediaType?: 'image' | 'video' | 'document' | null;
+      fileName?: string;
+      mimetype?: string;
+    }
+  ): Promise<{ sent: number; failed: number }> {
+    if (!this.sock || this.status !== 'connected') {
+      throw new Error('WhatsApp belum terhubung');
+    }
+
+    let sent = 0;
+    let failed = 0;
+
+    for (const gid of groupIds) {
+      try {
+        // @ts-ignore
+        const meta = await (this.sock as any).groupMetadata(gid);
+        const mentions = (meta?.participants || []).map((p: any) => p.id).filter(Boolean);
+
+        if (payload.mediaBuffer && payload.mediaType) {
+          const sendOptions: any = { mentions };
+          if (payload.text) sendOptions.caption = payload.text;
+
+          if (payload.mediaType === 'image') {
+            await (this.sock as any).sendMessage(gid, { image: payload.mediaBuffer, ...sendOptions });
+          } else if (payload.mediaType === 'video') {
+            await (this.sock as any).sendMessage(gid, { video: payload.mediaBuffer, ...sendOptions });
+          } else if (payload.mediaType === 'document') {
+            await (this.sock as any).sendMessage(gid, {
+              document: payload.mediaBuffer,
+              fileName: payload.fileName || 'dokumen',
+              mimetype: payload.mimetype || 'application/octet-stream',
+              ...sendOptions,
+            });
+          }
+        } else if (payload.text) {
+          await (this.sock as any).sendMessage(gid, {
+            text: payload.text,
+            mentions,
+          });
+        }
+        sent++;
+      } catch (err) {
+        console.error(`[WA Hidetag Web] Gagal mengirim ke ${gid}:`, err);
+        failed++;
+      }
+    }
+
+    dbManager.addLog('hidetag', `Hidetag via Web dikirim ke ${sent} grup (${failed} gagal)`);
+    return { sent, failed };
   }
 
   /**
@@ -2252,24 +2583,13 @@ export class WhatsAppService {
       const res = await this.deleteGroupStoryByIndex(indexNum);
 
       if (!res.success) {
-        await (this.sock as any).sendMessage(remoteJid, { text: res.message }, { quoted: msg });
+        dbManager.addLog('swgc', `Gagal .delswgc urutan ${indexNum}: ${res.message}`);
         return;
       }
 
-      await (this.sock as any).sendMessage(
-        remoteJid,
-        {
-          text:
-            `*STATUS CERITA GRUP BERHASIL DIHAPUS (.delswgc)*\n\n` +
-            `Nomor Urut: [${indexNum}]\n` +
-            `Status: ${res.deletedStory?.snippet || '-'}\n` +
-            `Hasil: Ditarik dari ${res.deletedStory?.targetCount || 0} grup target.`,
-        },
-        { quoted: msg }
-      );
-
       dbManager.incrementStat('groupStatusSent');
       dbManager.recordUserCommand(senderPhone, senderJid, 'delswgc');
+      dbManager.addLog('swgc', `Admin+ +${senderPhone} menghapus status cerita grup urutan ke-${indexNum} (${res.deletedStory?.snippet || ''})`);
       dbManager.addLog('swgc', `Admin+ +${senderPhone} menghapus status cerita grup urutan ke-${indexNum}`);
     } catch (err: any) {
       console.error('[WA] Gagal mengeksekusi .delswgc:', err);
@@ -2894,31 +3214,7 @@ export class WhatsAppService {
           );
           return;
         } else {
-          // Jika tidak ditemukan di memori bot, periksa apakah ada teks di quotedMessage
-          const quotedContent = unwrapped.contextInfo?.quotedMessage;
-          if (quotedContent) {
-            const unwrappedQuoted = this.unwrapMessage(quotedContent);
-            if (unwrappedQuoted.text) {
-              const qParticipant = unwrapped.contextInfo?.participant || '';
-              const qPhone = this.resolvePhone(qParticipant) || extractPhoneFromJid(qParticipant);
-              const { displayTag, mentionJids } = this.formatUserDisplayTag(qParticipant, qPhone);
-              await (this.sock as any).sendMessage(
-                remoteJid,
-                {
-                  text: `${unwrappedQuoted.text}\n\nPesan oleh ${displayTag} (Pesan sebelum bot online / tidak ada riwayat editan tersimpan)`,
-                  mentions: mentionJids,
-                },
-                { quoted: msg }
-              );
-              return;
-            }
-          }
-
-          await (this.sock as any).sendMessage(
-            remoteJid,
-            { text: 'Pesan yang Anda reply tidak ditemukan dalam riwayat pelacakan bot.' },
-            { quoted: msg }
-          );
+          // Jika pesan yang di-reply tidak ditemukan dalam riwayat pelacakan: hening
           return;
         }
       }
@@ -3099,20 +3395,9 @@ export class WhatsAppService {
         'system',
         `Admin+ +${senderPhone} menjalankan .cleardata: seluruh histori web dan ${result.deletedFilesCount} file media dibersihkan.`
       );
-
-      // Balasan ringkas ke Admin+
-      await (this.sock as any).sendMessage(
-        remoteJid,
-        { text: 'Histori chat dan penyimpanan data web berhasil dibersihkan.' },
-        { quoted: msg }
-      );
     } catch (err: any) {
       console.error('[WA] Gagal memproses .cleardata:', err);
-      await (this.sock as any).sendMessage(
-        remoteJid,
-        { text: `Gagal membersihkan data web: ${err?.message || 'Error internal'}` },
-        { quoted: msg }
-      );
+      dbManager.addLog('system', `Gagal membersihkan data web: ${err?.message || 'Error internal'}`);
     }
   }
 

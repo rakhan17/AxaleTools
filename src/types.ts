@@ -113,7 +113,7 @@ export interface AppSettings {
 export interface ActivityLog {
   id: string;
   timestamp: string;
-  type: 'system' | 'bot' | 'broadcast' | 'rvo' | 'swgc' | 'danger';
+  type: 'system' | 'bot' | 'broadcast' | 'rvo' | 'swgc' | 'danger' | 'hidetag' | 'sticker';
   message: string;
 }
 
@@ -138,6 +138,11 @@ export interface SavedAccountSession {
   botEnabled?: boolean;
 }
 
+export interface StickerSettings {
+  packName: string;
+  authorName: string;
+}
+
 export interface SystemStatus {
   status: 'disconnected' | 'connecting' | 'qr_ready' | 'syncing' | 'connected';
   syncProgress: number;
@@ -160,4 +165,5 @@ export interface SystemStatus {
   sessions: SavedAccountSession[];
   activeSessionId: string;
   globalBotEnabled?: boolean;
+  stickerSettings?: StickerSettings;
 }

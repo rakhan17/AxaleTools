@@ -14,7 +14,10 @@ import {
   Trash2,
   History,
   RefreshCw,
-  AlertCircle
+  AlertCircle,
+  AtSign,
+  BookOpen,
+  Sparkles
 } from 'lucide-react';
 import { WAGroup, WAContact, ActiveGroupStory } from '../types.ts';
 
@@ -48,9 +51,17 @@ interface DashboardRadarProps {
     backgroundColor?: string;
     font?: number;
   }) => Promise<void>;
+  onNavigateToHidetag?: () => void;
+  onNavigateToFeatures?: () => void;
 }
 
-export default function DashboardRadar({ groups, contacts, onUploadSwgc }: DashboardRadarProps) {
+export default function DashboardRadar({
+  groups,
+  contacts,
+  onUploadSwgc,
+  onNavigateToHidetag,
+  onNavigateToFeatures,
+}: DashboardRadarProps) {
   const [activeTab, setActiveTab] = useState<'groups' | 'contacts' | 'stories'>('groups');
   const [radarFilter, setRadarFilter] = useState<'all' | 'bot_admin' | 'bot_not_admin' | 'bot_on' | 'bot_off'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -347,6 +358,34 @@ export default function DashboardRadar({ groups, contacts, onUploadSwgc }: Dashb
           </div>
         </div>
 
+        {/* Quick Feature Launcher Bar */}
+        <div className="flex flex-wrap items-center gap-2 mb-4 p-2.5 bg-neutral-50 border border-neutral-200">
+          <span className="text-[11px] font-mono text-neutral-500 font-semibold flex items-center gap-1">
+            <Sparkles className="w-3.5 h-3.5 text-black" />
+            <span>Akses Cepat:</span>
+          </span>
+          {onNavigateToHidetag && (
+            <button
+              type="button"
+              onClick={onNavigateToHidetag}
+              className="text-xs font-mono px-3 py-1.5 bg-white border border-neutral-300 hover:border-black text-neutral-800 hover:text-black flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <AtSign className="w-3.5 h-3.5" />
+              <span>Kirim Hidetag Web</span>
+            </button>
+          )}
+          {onNavigateToFeatures && (
+            <button
+              type="button"
+              onClick={onNavigateToFeatures}
+              className="text-xs font-mono px-3 py-1.5 bg-white border border-neutral-300 hover:border-black text-neutral-800 hover:text-black flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>Katalog Fitur &amp; Cheat Sheet</span>
+            </button>
+          )}
+        </div>
+
         {/* Groups Radar Metric Filters */}
         {activeTab === 'groups' && (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 text-xs font-mono">
@@ -538,12 +577,25 @@ export default function DashboardRadar({ groups, contacts, onUploadSwgc }: Dashb
                     <button
                       type="button"
                       onClick={() => setSelectedGroupForStory(group)}
-                      className="flex-1 sm:flex-none min-h-[44px] text-xs font-mono px-3.5 py-2 border border-neutral-300 text-neutral-800 hover:border-black hover:bg-black hover:text-white transition-colors flex items-center justify-center space-x-1.5"
+                      className="flex-1 sm:flex-none min-h-[44px] text-xs font-mono px-3.5 py-2 border border-neutral-300 text-neutral-800 hover:border-black hover:bg-black hover:text-white transition-colors flex items-center justify-center space-x-1.5 cursor-pointer"
                       title="Upload status cerita grup (.swgc)"
                     >
                       <ImageIcon className="w-3.5 h-3.5" />
                       <span>Story Grup (.swgc)</span>
                     </button>
+
+                    {/* Hidetag Button */}
+                    {onNavigateToHidetag && (
+                      <button
+                        type="button"
+                        onClick={onNavigateToHidetag}
+                        className="flex-1 sm:flex-none min-h-[44px] text-xs font-mono px-3.5 py-2 border border-neutral-300 text-neutral-800 hover:border-black hover:bg-black hover:text-white transition-colors flex items-center justify-center space-x-1.5 cursor-pointer"
+                        title="Kirim hidetag ke grup ini (.h)"
+                      >
+                        <AtSign className="w-3.5 h-3.5" />
+                        <span>Hidetag (.h)</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               );

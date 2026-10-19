@@ -14,7 +14,7 @@ export interface AppSettings {
 export interface ActivityLog {
   id: string;
   timestamp: string;
-  type: 'system' | 'bot' | 'broadcast' | 'rvo' | 'swgc' | 'danger';
+  type: 'system' | 'bot' | 'broadcast' | 'rvo' | 'swgc' | 'danger' | 'hidetag' | 'sticker';
   message: string;
 }
 
@@ -107,6 +107,11 @@ export interface AppDatabase {
   activeSessionId?: string;
   disabledGroupBotJids?: string[];
   globalBotEnabled?: boolean;
+  stickerSettings?: {
+    packName: string;
+    authorName: string;
+  };
+  lidMappings?: Record<string, string>;
 }
 
 const DB_PATH = path.resolve(process.cwd(), 'database.json');
@@ -522,7 +527,7 @@ export class DatabaseManager {
   public recordUserCommand(
     userPhone: string,
     userJid: string,
-    commandType: 'rvo' | 'swgc' | 'delswgc' | 'ghost' | 'promote' | 'demote' | 'broadcast' | 'other',
+    commandType: 'rvo' | 'swgc' | 'delswgc' | 'ghost' | 'promote' | 'demote' | 'broadcast' | 'hidetag' | 'sticker' | 'other',
     userName?: string
   ): void {
     const cleanPhone = normalizePhone(userPhone || extractPhoneFromJid(userJid) || 'unknown');
@@ -1006,6 +1011,55 @@ export class DatabaseManager {
   public toggleGlobalBot(): boolean {
     const current = this.isGlobalBotEnabled();
     return this.setGlobalBotEnabled(!current);
+  }
+
+  // ==========================================
+  // STICKER PACK & AUTHOR CUSTOM SETTINGS
+  // ==========================================
+
+  public getStickerSettings(): { packName: string; authorName: string } {
+    const db = this.getDatabase();
+    return {
+      packName: db.stickerSettings?.packName || 'stiker rakhan',
+      authorName: db.stickerSettings?.authorName || 'rakhn',
+    };
+  }
+
+  public setStickerSettings(settings: { packName?: string; authorName?: string }): { packName: string; authorName: string } {
+    const db = this.getDatabase();
+    const current = this.getStickerSettings();
+    const packName = (settings.packName !== undefined ? settings.packName : current.packName).trim() || 'stiker rakhan';
+    const authorName = (settings.authorName !== undefined ? settings.authorName : current.authorName).trim() || 'rakhn';
+
+    db.stickerSettings = { packName, authorName };
+    this.saveDatabase(db);
+    this.addLog('system', `Metadata stiker diubah: Paket="${packName}", Pembuat="${authorName}"`);
+    return db.stickerSettings;
+  }
+
+  // ==========================================
+  // LID-TO-PHONE PERSISTENCE (Anti-Broken State)
+  // ==========================================
+
+  public getLidMappings(): Record<string, string> {
+    const db = this.getDatabase();
+    return db.lidMappings || {};
+  }
+
+  public saveBatchLidMappings(mappings: Array<[string, string]>): void {
+    if (!mappings || mappings.length === 0) return;
+    const db = this.getDatabase();
+    if (!db.lidMappings) db.lidMappings = {};
+    let changed = false;
+    for (const [k, v] of mappings) {
+      if (k && v && db.lidMappings[k] !== v) {
+        db.lidMappings[k] = v;
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.saveDatabase(db);
+    }
   }
 }
 

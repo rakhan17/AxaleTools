@@ -2,13 +2,15 @@ import { useState, useEffect, useCallback } from 'react';
 import Header from './components/Header.tsx';
 import LoginModal from './components/LoginModal.tsx';
 import DashboardRadar from './components/DashboardRadar.tsx';
+import HidetagPanel from './components/HidetagPanel.tsx';
+import FeatureHub from './components/FeatureHub.tsx';
 import BroadcastPanel from './components/BroadcastPanel.tsx';
 import AnalyticsPanel from './components/AnalyticsPanel.tsx';
 import GeneralSettings from './components/GeneralSettings.tsx';
 import { SystemStatus, WAGroup, WAContact, ActivityLog, AppStats, AnalyticsData } from './types.ts';
 
 export default function App() {
-  const [currentTab, setCurrentTab] = useState<'radar' | 'broadcast' | 'analytics' | 'settings'>('radar');
+  const [currentTab, setCurrentTab] = useState<'radar' | 'hidetag' | 'features' | 'broadcast' | 'analytics' | 'settings'>('radar');
   const [status, setStatus] = useState<SystemStatus | null>(null);
   const [groups, setGroups] = useState<WAGroup[]>([]);
   const [contacts, setContacts] = useState<WAContact[]>([]);
@@ -308,6 +310,19 @@ export default function App() {
     }
   };
 
+  // Update custom sticker metadata (pack name and author name)
+  const handleUpdateStickerSettings = async (settings: { packName: string; authorName: string }) => {
+    const res = await fetch('/api/settings/sticker', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settings),
+    });
+    if (res.ok) {
+      fetchStatus();
+      fetchSettings();
+    }
+  };
+
   // Add Admin+
   const handleAddAdmin = async (phone: string) => {
     const res = await fetch('/api/settings/admin-plus', {
@@ -422,7 +437,21 @@ export default function App() {
         />
 
         {currentTab === 'radar' && (
-          <DashboardRadar groups={groups} contacts={contacts} onUploadSwgc={handleUploadSwgc} />
+          <DashboardRadar
+            groups={groups}
+            contacts={contacts}
+            onUploadSwgc={handleUploadSwgc}
+            onNavigateToHidetag={() => setCurrentTab('hidetag')}
+            onNavigateToFeatures={() => setCurrentTab('features')}
+          />
+        )}
+
+        {currentTab === 'hidetag' && (
+          <HidetagPanel groups={groups} />
+        )}
+
+        {currentTab === 'features' && (
+          <FeatureHub />
         )}
 
         {currentTab === 'broadcast' && (
@@ -445,8 +474,10 @@ export default function App() {
             logs={logs}
             stats={stats}
             globalBotEnabled={status?.globalBotEnabled ?? true}
+            stickerSettings={status?.stickerSettings}
             onToggleGlobalBot={handleToggleGlobalBot}
             onUpdateBotName={handleUpdateBotName}
+            onUpdateStickerSettings={handleUpdateStickerSettings}
             onAddAdmin={handleAddAdmin}
             onRemoveAdmin={handleRemoveAdmin}
             onDangerPurge={handleDangerPurge}

@@ -16,6 +16,84 @@
   },
   "logs": [
     {
+      "id": "log-1791965657343-mh0vu",
+      "timestamp": "2026-10-14T08:14:17.343Z",
+      "type": "system",
+      "message": "WhatsApp terhubung sebagai youRn (+6287734544536) [Sesi: session_default]"
+    },
+    {
+      "id": "log-1791965353246-nnfdu",
+      "timestamp": "2026-10-14T08:09:13.246Z",
+      "type": "bot",
+      "message": "Stiker (Foto) berhasil dibuat untuk +6287734544536"
+    },
+    {
+      "id": "log-1791965137706-34w64",
+      "timestamp": "2026-10-14T08:05:37.706Z",
+      "type": "system",
+      "message": "WhatsApp terhubung sebagai Rakhan (+6287734544536) [Sesi: session_default]"
+    },
+    {
+      "id": "log-1791965130951-i8r7h",
+      "timestamp": "2026-10-14T08:05:30.951Z",
+      "type": "system",
+      "message": "Koneksi WA terputus: kode status 515 [Sesi: session_default]"
+    },
+    {
+      "id": "log-1791965108892-2e2xe",
+      "timestamp": "2026-10-14T08:05:08.892Z",
+      "type": "system",
+      "message": "Koneksi WA terputus: kode status 408 [Sesi: session_default]"
+    },
+    {
+      "id": "log-1791964944207-wunxv",
+      "timestamp": "2026-10-14T08:02:24.207Z",
+      "type": "system",
+      "message": "Koneksi WA terputus: kode status 408 [Sesi: session_default]"
+    },
+    {
+      "id": "log-1791964779284-3wxgd",
+      "timestamp": "2026-10-14T07:59:39.284Z",
+      "type": "system",
+      "message": "Koneksi WA terputus: kode status 408 [Sesi: session_default]"
+    },
+    {
+      "id": "log-1791964614421-bgfml",
+      "timestamp": "2026-10-14T07:56:54.421Z",
+      "type": "system",
+      "message": "Koneksi WA terputus: kode status 408 [Sesi: session_default]"
+    },
+    {
+      "id": "log-1791964448849-n8uo0",
+      "timestamp": "2026-10-14T07:54:08.849Z",
+      "type": "system",
+      "message": "Koneksi WA terputus: kode status 408 [Sesi: session_default]"
+    },
+    {
+      "id": "log-1791964283975-94utx",
+      "timestamp": "2026-10-14T07:51:23.975Z",
+      "type": "system",
+      "message": "Koneksi WA terputus: kode status 408 [Sesi: session_default]"
+    },
+    {
+      "id": "log-1791964119549-65gyw",
+      "timestamp": "2026-10-14T07:48:39.549Z",
+      "type": "system",
+      "message": "Koneksi WA terputus: kode status 408 [Sesi: session_default]"
+    },
+    {
+      "id": "log-1791963954636-cl18h",
+      "timestamp": "2026-10-14T07:45:54.636Z",
+      "type": "system",
+      "message": "Koneksi WA terputus: kode status 408 [Sesi: session_default]"
+    },
+    {
+      "id": "log-1791962717058-wppng",
+      "timestamp": "2026-10-14T07:25:17.058Z",
+      "type": "system",
+      "message": "Koneksi WA terputus: kode status 401 [Sesi: session_default] - Sesi dibersihkan untuk login ulang."
+    },
+    {
       "id": "log-1791253611724-9i0rn",
       "timestamp": "2026-10-06T02:26:51.724Z",
       "type": "bot",
@@ -218,28 +296,28 @@
     "totalBroadcasts": 0,
     "rvoProcessed": 1,
     "groupStatusSent": 2,
-    "lastSync": "2026-10-06T02:19:35.861Z"
+    "lastSync": "2026-10-14T08:14:19.996Z"
   },
   "sessions": [
     {
       "id": "session_default",
       "name": "Akun Utama",
       "createdAt": "2026-09-21T15:00:52.755Z",
-      "lastActive": "2026-10-06T02:19:33.047Z",
+      "lastActive": "2026-10-14T08:14:17.342Z",
       "isActive": true,
       "status": "connected",
       "botEnabled": true,
       "phone": "6287734544536",
       "jid": "6287734544536@s.whatsapp.net",
       "botName": "youRn",
-      "avatarUrl": "https://pps.whatsapp.net/v/t61.24694-24/806490389_2289437601870785_6526752177311720137_n.jpg?stp=dst-jpg_s96x96_tt6&ccb=11-4&oh=01_Q5Aa5wGSAc-NInSRw5LZFIFrTIfZYMYrgcZH8giyDGfH6Rop9w&oe=6AD15541&_nc_sid=5e03e0&_nc_cat=107"
+      "avatarUrl": "https://pps.whatsapp.net/v/t61.24694-24/806490389_2289437601870785_6526752177311720137_n.jpg?stp=dst-jpg_s96x96_tt6&ccb=11-4&oh=01_Q5Aa5wFu1YN0_Zj8FMpecpl0YvPAfNmWpxIwMKYt0o_MqALV1Q&oe=6ADC51C1&_nc_sid=5e03e0&_nc_cat=107"
     }
   ],
   "activeSessionId": "session_default",
   "disabledGroupBotJids": [],
   "analytics": {
-    "totalMessagesTracked": 447,
-    "totalCommandsTracked": 7,
+    "totalMessagesTracked": 755,
+    "totalCommandsTracked": 8,
     "groupActivity": {
       "120363424193089340@g.us": {
         "groupId": "120363424193089340@g.us",
@@ -250,14 +328,14 @@
       "120363428326558833@g.us": {
         "groupId": "120363428326558833@g.us",
         "groupName": "𝙉𝙜𝙖𝙬𝙞 𝙈𝙖𝙭𝙭𝙞𝙣𝙜 🧏",
-        "messageCount": 21,
-        "lastActive": "2026-10-06T02:27:21.309Z"
+        "messageCount": 23,
+        "lastActive": "2026-10-14T08:10:45.116Z"
       },
       "120363428146873424@g.us": {
         "groupId": "120363428146873424@g.us",
         "groupName": "𝑰𝑵𝑲 𝑻𝑯𝑶𝑼𝑮𝑯𝑻𝑺",
-        "messageCount": 172,
-        "lastActive": "2026-10-06T02:29:04.382Z"
+        "messageCount": 180,
+        "lastActive": "2026-10-14T08:12:59.455Z"
       },
       "120363412180607262@g.us": {
         "groupId": "120363412180607262@g.us",
@@ -268,26 +346,26 @@
       "120363203568431920@g.us": {
         "groupId": "120363203568431920@g.us",
         "groupName": "ALL STOK GANJA DIMPLOX⁵",
-        "messageCount": 15,
-        "lastActive": "2026-10-06T02:28:46.453Z"
+        "messageCount": 18,
+        "lastActive": "2026-10-14T08:09:04.497Z"
       },
       "120363400120051175@g.us": {
         "groupId": "120363400120051175@g.us",
         "groupName": "PUSAT GANJA ANTI RESS³",
-        "messageCount": 8,
-        "lastActive": "2026-10-06T02:28:57.481Z"
+        "messageCount": 20,
+        "lastActive": "2026-10-14T08:11:59.597Z"
       },
       "120363210532109324@g.us": {
         "groupId": "120363210532109324@g.us",
         "groupName": "GB RESS DIMPLOX²",
-        "messageCount": 9,
-        "lastActive": "2026-10-06T02:28:56.901Z"
+        "messageCount": 24,
+        "lastActive": "2026-10-14T08:12:51.532Z"
       },
       "120363039976324512@g.us": {
         "groupId": "120363039976324512@g.us",
         "groupName": "RESS DAN GANJA¹",
-        "messageCount": 9,
-        "lastActive": "2026-10-06T02:28:58.273Z"
+        "messageCount": 22,
+        "lastActive": "2026-10-14T08:12:00.008Z"
       },
       "120363430349394416@g.us": {
         "groupId": "120363430349394416@g.us",
@@ -306,6 +384,30 @@
         "groupName": "GB RESS GANJA⁷",
         "messageCount": 1,
         "lastActive": "2026-10-06T02:28:45.787Z"
+      },
+      "120363324010373502@g.us": {
+        "groupId": "120363324010373502@g.us",
+        "groupName": "4 IDN",
+        "messageCount": 31,
+        "lastActive": "2026-10-14T08:12:38.788Z"
+      },
+      "120363428860659508@g.us": {
+        "groupId": "120363428860659508@g.us",
+        "groupName": "mi amor❣️ baginda YAYACY RANICY OKTACY",
+        "messageCount": 106,
+        "lastActive": "2026-10-14T08:14:18.120Z"
+      },
+      "120363427270425390@g.us": {
+        "groupId": "120363427270425390@g.us",
+        "groupName": "「𝐖𝐬𝐬𝟔」𓆩⸸𓆪",
+        "messageCount": 3,
+        "lastActive": "2026-10-14T08:08:45.673Z"
+      },
+      "120363430917868956@g.us": {
+        "groupId": "120363430917868956@g.us",
+        "groupName": "Grup WhatsApp",
+        "messageCount": 2,
+        "lastActive": "2026-10-14T08:09:13.350Z"
       }
     },
     "userActivity": {
@@ -313,7 +415,7 @@
         "userJid": "6287734544536@s.whatsapp.net",
         "phone": "6287734544536",
         "name": "Admin (+6287734544536)",
-        "totalCommands": 7,
+        "totalCommands": 8,
         "commandBreakdown": {
           "rvo": 1,
           "swgc": 2,
@@ -322,9 +424,9 @@
           "promote": 0,
           "demote": 0,
           "broadcast": 0,
-          "other": 0
+          "other": 1
         },
-        "lastUsed": "2026-10-06T02:20:41.122Z"
+        "lastUsed": "2026-10-14T08:09:13.244Z"
       }
     },
     "userChatActivity": {
@@ -332,10 +434,10 @@
         "userJid": "6287734544536@s.whatsapp.net",
         "phone": "6287734544536",
         "name": "youRn",
-        "totalMessages": 32,
-        "groupMessages": 14,
-        "privateMessages": 11,
-        "lastActive": "2026-10-06T02:20:41.224Z"
+        "totalMessages": 41,
+        "groupMessages": 21,
+        "privateMessages": 12,
+        "lastActive": "2026-10-14T08:12:03.953Z"
       },
       "116381483847895": {
         "userJid": "116381483847895@lid",
@@ -368,10 +470,10 @@
         "userJid": "8457377869998@lid",
         "phone": "628457377869998",
         "name": "User (+628457377869998)",
-        "totalMessages": 7,
+        "totalMessages": 108,
         "groupMessages": 0,
-        "privateMessages": 7,
-        "lastActive": "2026-10-06T02:26:06.741Z"
+        "privateMessages": 108,
+        "lastActive": "2026-10-14T08:13:15.445Z"
       },
       "191229694328883": {
         "userJid": "191229694328883@lid",
@@ -404,10 +506,10 @@
         "userJid": "120363325781630139@newsletter",
         "phone": "120363325781630139",
         "name": "User (+120363325781630139)",
-        "totalMessages": 4,
+        "totalMessages": 6,
         "groupMessages": 0,
-        "privateMessages": 4,
-        "lastActive": "2026-10-06T02:25:16.887Z"
+        "privateMessages": 6,
+        "lastActive": "2026-10-14T08:14:17.194Z"
       },
       "256496218718218": {
         "userJid": "256496218718218@lid",
@@ -687,17 +789,351 @@
         "groupMessages": 5,
         "privateMessages": 0,
         "lastActive": "2026-10-06T02:28:58.273Z"
+      },
+      "162067084505122": {
+        "userJid": "162067084505122@lid",
+        "phone": "162067084505122",
+        "name": "aan",
+        "totalMessages": 1,
+        "groupMessages": 1,
+        "privateMessages": 0,
+        "lastActive": "2026-10-14T08:05:37.609Z"
+      },
+      "63307952222406": {
+        "userJid": "63307952222406@lid",
+        "phone": "63307952222406",
+        "name": "fruere",
+        "totalMessages": 2,
+        "groupMessages": 2,
+        "privateMessages": 0,
+        "lastActive": "2026-10-14T08:05:47.845Z"
+      },
+      "178967764029662": {
+        "userJid": "178967764029662@lid",
+        "phone": "178967764029662",
+        "name": "sαwαko🌸",
+        "totalMessages": 1,
+        "groupMessages": 1,
+        "privateMessages": 0,
+        "lastActive": "2026-10-14T08:05:44.707Z"
+      },
+      "140467408764951": {
+        "userJid": "140467408764951@lid",
+        "phone": "140467408764951",
+        "name": "JAYRE BOT",
+        "totalMessages": 13,
+        "groupMessages": 13,
+        "privateMessages": 0,
+        "lastActive": "2026-10-14T08:13:46.397Z"
+      },
+      "36795689517177": {
+        "userJid": "36795689517177@lid",
+        "phone": "36795689517177",
+        "name": "mexx",
+        "totalMessages": 4,
+        "groupMessages": 4,
+        "privateMessages": 0,
+        "lastActive": "2026-10-14T08:06:11.183Z"
+      },
+      "26414703235282": {
+        "userJid": "26414703235282@lid",
+        "phone": "26414703235282",
+        "name": "t",
+        "totalMessages": 33,
+        "groupMessages": 33,
+        "privateMessages": 0,
+        "lastActive": "2026-10-14T08:14:18.120Z"
+      },
+      "52442121142333": {
+        "userJid": "52442121142333@lid",
+        "phone": "52442121142333",
+        "name": "𝐖𝐬𝐬𝟔'𝐜𝐲𝐚𝐚",
+        "totalMessages": 2,
+        "groupMessages": 2,
+        "privateMessages": 0,
+        "lastActive": "2026-10-14T08:06:41.119Z"
+      },
+      "272361307787283": {
+        "userJid": "272361307787283@lid",
+        "phone": "272361307787283",
+        "name": "Adel",
+        "totalMessages": 2,
+        "groupMessages": 2,
+        "privateMessages": 0,
+        "lastActive": "2026-10-14T08:07:36.148Z"
+      },
+      "253536885583977": {
+        "userJid": "253536885583977@lid",
+        "phone": "253536885583977",
+        "name": "Yusuf",
+        "totalMessages": 7,
+        "groupMessages": 7,
+        "privateMessages": 0,
+        "lastActive": "2026-10-14T08:12:38.788Z"
+      },
+      "17803344105643": {
+        "userJid": "17803344105643@lid",
+        "phone": "17803344105643",
+        "name": "𝙏𝘼𝙋𝙕𝙔 𝙈𝘼𝙍𝙆𝙀𝙏",
+        "totalMessages": 4,
+        "groupMessages": 4,
+        "privateMessages": 0,
+        "lastActive": "2026-10-14T08:06:56.305Z"
+      },
+      "135974856179777": {
+        "userJid": "135974856179777@lid",
+        "phone": "135974856179777",
+        "name": "iya ini star",
+        "totalMessages": 9,
+        "groupMessages": 9,
+        "privateMessages": 0,
+        "lastActive": "2026-10-14T08:12:06.933Z"
+      },
+      "56990491529339": {
+        "userJid": "56990491529339@lid",
+        "phone": "56990491529339",
+        "name": "meylin",
+        "totalMessages": 21,
+        "groupMessages": 21,
+        "privateMessages": 0,
+        "lastActive": "2026-10-14T08:14:08.068Z"
+      },
+      "162874454483064": {
+        "userJid": "162874454483064@lid",
+        "phone": "162874454483064",
+        "name": "dudul",
+        "totalMessages": 13,
+        "groupMessages": 13,
+        "privateMessages": 0,
+        "lastActive": "2026-10-14T08:14:17.874Z"
+      },
+      "107383258931211": {
+        "userJid": "107383258931211@lid",
+        "phone": "107383258931211",
+        "name": "deviyanti",
+        "totalMessages": 1,
+        "groupMessages": 1,
+        "privateMessages": 0,
+        "lastActive": "2026-10-14T08:07:19.457Z"
+      },
+      "131683948998706": {
+        "userJid": "131683948998706@lid",
+        "phone": "131683948998706",
+        "name": "Wibowo",
+        "totalMessages": 3,
+        "groupMessages": 3,
+        "privateMessages": 0,
+        "lastActive": "2026-10-14T08:10:09.651Z"
+      },
+      "184945620332676": {
+        "userJid": "184945620332676@lid",
+        "phone": "184945620332676",
+        "name": "YayaVia",
+        "totalMessages": 1,
+        "groupMessages": 1,
+        "privateMessages": 0,
+        "lastActive": "2026-10-14T08:07:32.416Z"
+      },
+      "1331976785987": {
+        "userJid": "1331976785987@lid",
+        "phone": "1331976785987",
+        "name": "ig:@fxploit-25idc.",
+        "totalMessages": 4,
+        "groupMessages": 4,
+        "privateMessages": 0,
+        "lastActive": "2026-10-14T08:09:04.497Z"
+      },
+      "234999404048534": {
+        "userJid": "234999404048534@lid",
+        "phone": "234999404048534",
+        "name": "eldy",
+        "totalMessages": 7,
+        "groupMessages": 7,
+        "privateMessages": 0,
+        "lastActive": "2026-10-14T08:08:05.199Z"
+      },
+      "199048044748969": {
+        "userJid": "199048044748969@lid",
+        "phone": "199048044748969",
+        "name": ".",
+        "totalMessages": 1,
+        "groupMessages": 1,
+        "privateMessages": 0,
+        "lastActive": "2026-10-14T08:08:08.394Z"
+      },
+      "131976241668285": {
+        "userJid": "131976241668285@lid",
+        "phone": "131976241668285",
+        "name": "o, idgaf",
+        "totalMessages": 3,
+        "groupMessages": 0,
+        "privateMessages": 3,
+        "lastActive": "2026-10-14T08:12:58.572Z"
+      },
+      "261242040123394": {
+        "userJid": "261242040123394@lid",
+        "phone": "261242040123394",
+        "name": "j, jᥱᥒіі :c",
+        "totalMessages": 1,
+        "groupMessages": 1,
+        "privateMessages": 0,
+        "lastActive": "2026-10-14T08:08:27.352Z"
+      },
+      "266442607960266": {
+        "userJid": "266442607960266@lid",
+        "phone": "266442607960266",
+        "name": "Louis",
+        "totalMessages": 3,
+        "groupMessages": 3,
+        "privateMessages": 0,
+        "lastActive": "2026-10-14T08:08:55.478Z"
+      },
+      "120363426074970198": {
+        "userJid": "120363426074970198@newsletter",
+        "phone": "120363426074970198",
+        "name": "User (+120363426074970198)",
+        "totalMessages": 2,
+        "groupMessages": 0,
+        "privateMessages": 2,
+        "lastActive": "2026-10-14T08:14:17.193Z"
+      },
+      "59296821829868": {
+        "userJid": "59296821829868@lid",
+        "phone": "59296821829868",
+        "name": "~",
+        "totalMessages": 7,
+        "groupMessages": 7,
+        "privateMessages": 0,
+        "lastActive": "2026-10-14T08:11:48.787Z"
+      },
+      "113920098443505": {
+        "userJid": "113920098443505@lid",
+        "phone": "113920098443505",
+        "name": "©V₳NÐERR™ _1709",
+        "totalMessages": 2,
+        "groupMessages": 2,
+        "privateMessages": 0,
+        "lastActive": "2026-10-14T08:12:15.509Z"
+      },
+      "3114237198541": {
+        "userJid": "3114237198541@lid",
+        "phone": "3114237198541",
+        "name": "D€R•L€N¥|",
+        "totalMessages": 1,
+        "groupMessages": 1,
+        "privateMessages": 0,
+        "lastActive": "2026-10-14T08:08:45.673Z"
+      },
+      "250122202013803": {
+        "userJid": "250122202013803@lid",
+        "phone": "250122202013803",
+        "name": "sulip",
+        "totalMessages": 3,
+        "groupMessages": 3,
+        "privateMessages": 0,
+        "lastActive": "2026-10-14T08:09:36.106Z"
+      },
+      "169364317810688": {
+        "userJid": "169364317810688@lid",
+        "phone": "169364317810688",
+        "name": "masukan teks",
+        "totalMessages": 3,
+        "groupMessages": 3,
+        "privateMessages": 0,
+        "lastActive": "2026-10-14T08:11:42.860Z"
+      },
+      "120363403678132525": {
+        "userJid": "120363403678132525@newsletter",
+        "phone": "120363403678132525",
+        "name": "User (+120363403678132525)",
+        "totalMessages": 3,
+        "groupMessages": 0,
+        "privateMessages": 3,
+        "lastActive": "2026-10-14T08:14:17.195Z"
+      },
+      "229450541207661": {
+        "userJid": "229450541207661@lid",
+        "phone": "229450541207661",
+        "name": "Reyy13 new",
+        "totalMessages": 24,
+        "groupMessages": 24,
+        "privateMessages": 0,
+        "lastActive": "2026-10-14T08:12:00.008Z"
+      },
+      "173199555837980": {
+        "userJid": "173199555837980@lid",
+        "phone": "173199555837980",
+        "name": "NON-CHALANT!",
+        "totalMessages": 4,
+        "groupMessages": 4,
+        "privateMessages": 0,
+        "lastActive": "2026-10-14T08:12:05.055Z"
+      },
+      "213343994380446": {
+        "userJid": "213343994380446@lid",
+        "phone": "213343994380446",
+        "name": "ᅠᅠ⠀᠌ᅠᅠᅠᅠ⠀᠌ᅠ",
+        "totalMessages": 1,
+        "groupMessages": 1,
+        "privateMessages": 0,
+        "lastActive": "2026-10-14T08:10:45.116Z"
+      },
+      "183314036080856": {
+        "userJid": "183314036080856@lid",
+        "phone": "183314036080856",
+        "name": "luthfiramadhan",
+        "totalMessages": 2,
+        "groupMessages": 2,
+        "privateMessages": 0,
+        "lastActive": "2026-10-14T08:11:35.586Z"
+      },
+      "196005681172531": {
+        "userJid": "196005681172531@lid",
+        "phone": "196005681172531",
+        "name": "Zulian 2",
+        "totalMessages": 3,
+        "groupMessages": 3,
+        "privateMessages": 0,
+        "lastActive": "2026-10-14T08:11:38.780Z"
+      },
+      "252514616213520": {
+        "userJid": "252514616213520@lid",
+        "phone": "252514616213520",
+        "name": "nanut ||+𝟒𝟒𝟒|| 𝟐𝟐𝟔⸸",
+        "totalMessages": 2,
+        "groupMessages": 2,
+        "privateMessages": 0,
+        "lastActive": "2026-10-14T08:12:23.741Z"
+      },
+      "156264046788653": {
+        "userJid": "156264046788653@lid",
+        "phone": "156264046788653",
+        "name": "langstore16",
+        "totalMessages": 2,
+        "groupMessages": 2,
+        "privateMessages": 0,
+        "lastActive": "2026-10-14T08:12:51.532Z"
+      },
+      "212833430163480": {
+        "userJid": "212833430163480@lid",
+        "phone": "212833430163480",
+        "name": "khriss not qriss",
+        "totalMessages": 2,
+        "groupMessages": 1,
+        "privateMessages": 1,
+        "lastActive": "2026-10-14T08:12:59.455Z"
       }
     },
     "timeSeries": {
       "daily": {
-        "2026-10-06": 447
+        "2026-10-06": 447,
+        "2026-10-14": 308
       },
       "monthly": {
-        "2026-10": 447
+        "2026-10": 755
       },
       "yearly": {
-        "2026": 447
+        "2026": 755
       }
     },
     "commandCounts": {
@@ -707,7 +1143,8 @@
       "ghost": 4,
       "promote": 0,
       "demote": 0,
-      "broadcast": 0
+      "broadcast": 0,
+      "sticker": 1
     }
   }
 }

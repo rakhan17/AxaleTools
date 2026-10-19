@@ -1,6 +1,6 @@
-import { useState, FormEvent } from 'react';
-import { Shield, Plus, Trash2, AlertOctagon, Save, Power, PowerOff } from 'lucide-react';
-import { ActivityLog, AppStats } from '../types.ts';
+import { useState, FormEvent, useEffect } from 'react';
+import { Shield, Plus, Trash2, AlertOctagon, Save, Power, PowerOff, Sparkles } from 'lucide-react';
+import { ActivityLog, AppStats, StickerSettings } from '../types.ts';
 
 interface GeneralSettingsProps {
   botName: string;
@@ -8,8 +8,10 @@ interface GeneralSettingsProps {
   logs: ActivityLog[];
   stats: AppStats;
   globalBotEnabled?: boolean;
+  stickerSettings?: StickerSettings;
   onToggleGlobalBot?: (enabled?: boolean) => Promise<void>;
   onUpdateBotName: (name: string) => Promise<void>;
+  onUpdateStickerSettings?: (settings: { packName: string; authorName: string }) => Promise<void>;
   onAddAdmin: (phone: string) => Promise<void>;
   onRemoveAdmin: (phone: string) => Promise<void>;
   onDangerPurge: (options?: { resetSessions?: boolean }) => Promise<void>;
@@ -21,13 +23,18 @@ export default function GeneralSettings({
   logs,
   stats,
   globalBotEnabled = true,
+  stickerSettings,
   onToggleGlobalBot,
   onUpdateBotName,
+  onUpdateStickerSettings,
   onAddAdmin,
   onRemoveAdmin,
   onDangerPurge,
 }: GeneralSettingsProps) {
   const [currentBotName, setCurrentBotName] = useState(botName);
+  const [stickerPack, setStickerPack] = useState(stickerSettings?.packName || 'stiker rakhan');
+  const [stickerAuthor, setStickerAuthor] = useState(stickerSettings?.authorName || 'rakhn');
+  const [isSavingSticker, setIsSavingSticker] = useState(false);
   const [newAdminPhone, setNewAdminPhone] = useState('');
   const [isSavingName, setIsSavingName] = useState(false);
   const [isAddingAdmin, setIsAddingAdmin] = useState(false);
@@ -35,6 +42,13 @@ export default function GeneralSettings({
   const [dangerConfirm, setDangerConfirm] = useState(false);
   const [isPurging, setIsPurging] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (stickerSettings) {
+      if (stickerSettings.packName) setStickerPack(stickerSettings.packName);
+      if (stickerSettings.authorName) setStickerAuthor(stickerSettings.authorName);
+    }
+  }, [stickerSettings]);
 
   const handleToggleBot = async () => {
     if (!onToggleGlobalBot) return;
@@ -62,6 +76,24 @@ export default function GeneralSettings({
       setFeedback(`Gagal update nama: ${err?.message || 'Error'}`);
     } finally {
       setIsSavingName(false);
+    }
+  };
+
+  const handleSaveStickerSettings = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!onUpdateStickerSettings) return;
+    setIsSavingSticker(true);
+    setFeedback(null);
+    try {
+      await onUpdateStickerSettings({
+        packName: stickerPack.trim() || 'stiker rakhan',
+        authorName: stickerAuthor.trim() || 'rakhn',
+      });
+      setFeedback('Metadata stiker WhatsApp (Paket & Author) berhasil disimpan.');
+    } catch (err: any) {
+      setFeedback(`Gagal menyimpan stiker: ${err?.message || 'Error'}`);
+    } finally {
+      setIsSavingSticker(false);
     }
   };
 
@@ -192,7 +224,79 @@ export default function GeneralSettings({
         </form>
       </div>
 
-      {/* 2. Manajemen Nomor Admin+ */}
+      {/* 2. Pengaturan Kustom Nama Stiker & Paket (.s / .sticker) */}
+      <div className="border border-neutral-200 bg-white p-6">
+        <div className="border-b border-neutral-200 pb-3 mb-4">
+          <div className="flex items-center space-x-2">
+            <Sparkles className="w-4 h-4 text-black" />
+            <h2 className="text-sm font-semibold tracking-wider uppercase text-neutral-900">
+              Kustom Nama Stiker &amp; Paket (.s / .sticker)
+            </h2>
+          </div>
+          <p className="text-xs text-neutral-500 mt-0.5">
+            Atur nama pembuat (author) dan paket stiker yang akan otomatis disematkan ke dalam metadata EXIF stiker WhatsApp ketika dibuat dengan perintah .s.
+          </p>
+        </div>
+
+        <form onSubmit={handleSaveStickerSettings} className="space-y-4 max-w-xl">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-mono uppercase text-neutral-700 font-bold mb-1">
+                Nama Pembuat / Author:
+              </label>
+              <input
+                type="text"
+                value={stickerAuthor}
+                onChange={(e) => setStickerAuthor(e.target.value)}
+                placeholder="Contoh: rakhn"
+                className="w-full text-xs font-mono p-2.5 border border-neutral-300 focus:outline-none focus:border-black min-h-[44px]"
+              />
+              <p className="text-[11px] text-neutral-400 mt-1 font-mono">Tampil sebagai nama pembuat di WhatsApp</p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-mono uppercase text-neutral-700 font-bold mb-1">
+                Nama Paket Stiker (Pack):
+              </label>
+              <input
+                type="text"
+                value={stickerPack}
+                onChange={(e) => setStickerPack(e.target.value)}
+                placeholder="Contoh: stiker rakhan"
+                className="w-full text-xs font-mono p-2.5 border border-neutral-300 focus:outline-none focus:border-black min-h-[44px]"
+              />
+              <p className="text-[11px] text-neutral-400 mt-1 font-mono">Tampil sebagai nama album/pack di WhatsApp</p>
+            </div>
+          </div>
+
+          {/* Live Preview Box */}
+          <div className="p-3 bg-neutral-50 border border-neutral-200 text-xs font-mono">
+            <span className="text-[10px] text-neutral-400 uppercase tracking-wider block mb-1.5 font-bold">
+              Pratinjau Tampilan Info Stiker di WhatsApp:
+            </span>
+            <div className="flex items-center space-x-3 bg-white p-2.5 border border-neutral-200">
+              <div className="w-10 h-10 bg-neutral-100 border border-neutral-200 flex items-center justify-center font-bold text-neutral-700 flex-shrink-0">
+                ✨
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-bold text-neutral-900 truncate">{stickerPack || 'stiker rakhan'}</p>
+                <p className="text-neutral-500 text-[11px] truncate">oleh {stickerAuthor || 'rakhn'}</p>
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={isSavingSticker || !onUpdateStickerSettings}
+            className="min-h-[44px] px-5 py-2.5 bg-black text-white text-xs font-mono uppercase font-bold hover:bg-neutral-800 disabled:opacity-50 flex items-center justify-center space-x-1.5"
+          >
+            <Save className="w-3.5 h-3.5" />
+            <span>{isSavingSticker ? 'Menyimpan...' : 'Simpan Pengaturan Stiker'}</span>
+          </button>
+        </form>
+      </div>
+
+      {/* 3. Manajemen Nomor Admin+ */}
       <div className="border border-neutral-200 bg-white p-4 sm:p-6">
         <div className="border-b border-neutral-200 pb-3 mb-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">

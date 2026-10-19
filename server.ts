@@ -51,6 +51,7 @@ app.get('/api/status', (req, res) => {
     stats: db.stats,
     botName: db.botName,
     globalBotEnabled: dbManager.isGlobalBotEnabled(),
+    stickerSettings: dbManager.getStickerSettings(),
   });
 });
 
@@ -220,12 +221,34 @@ app.post('/api/bot/toggle-general', (req, res) => {
     } else {
       newStatus = dbManager.toggleGlobalBot();
     }
+    // When turning master bot on, also guarantee active session bot is enabled
+    if (newStatus) {
+      const activeId = dbManager.getActiveSessionId();
+      if (activeId) {
+        dbManager.setSessionBotEnabled(activeId, true);
+      }
+    }
     res.json({
       success: true,
       globalBotEnabled: newStatus,
     });
   } catch (err: any) {
     res.status(500).json({ success: false, message: err?.message || 'Gagal mengubah status bot global' });
+  }
+});
+
+// Custom Sticker Pack & Author Settings
+app.get('/api/settings/sticker', (req, res) => {
+  res.json(dbManager.getStickerSettings());
+});
+
+app.put('/api/settings/sticker', (req, res) => {
+  try {
+    const { packName, authorName } = req.body || {};
+    const updated = dbManager.setStickerSettings({ packName, authorName });
+    res.json({ success: true, stickerSettings: updated });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err?.message || 'Gagal menyimpan pengaturan stiker' });
   }
 });
 
@@ -482,6 +505,67 @@ app.delete('/api/swgc/stories/:index', async (req, res) => {
   }
 });
 
+// 7. Web UI Hidetag Sender (Silent Tag All Group Members)
+app.post('/api/hidetag/send', upload.single('media'), async (req, res) => {
+  try {
+    const file = req.file;
+    const { groupIds, text } = req.body;
+
+    let targetGroupIds: string[] = [];
+    if (typeof groupIds === 'string') {
+      try {
+        targetGroupIds = JSON.parse(groupIds);
+      } catch {
+        targetGroupIds = groupIds.split(',').map((id: string) => id.trim()).filter(Boolean);
+      }
+    } else if (Array.isArray(groupIds)) {
+      targetGroupIds = groupIds;
+    }
+
+    if (targetGroupIds.length === 0) {
+      return res.status(400).json({ success: false, message: 'Pilih minimal satu grup untuk target hidetag.' });
+    }
+
+    let mediaBuffer: Buffer | null = null;
+    let mediaType: 'image' | 'video' | 'document' | null = null;
+    let fileName: string | undefined;
+    let mimetype: string | undefined;
+
+    if (file) {
+      mediaBuffer = fs.readFileSync(file.path);
+      mimetype = file.mimetype;
+      fileName = file.originalname;
+      if (file.mimetype.startsWith('image/')) {
+        mediaType = 'image';
+      } else if (file.mimetype.startsWith('video/')) {
+        mediaType = 'video';
+      } else {
+        mediaType = 'document';
+      }
+      try {
+        fs.unlinkSync(file.path);
+      } catch {}
+    }
+
+    const result = await waService.sendHidetagNative(targetGroupIds, {
+      text: (text || '').trim(),
+      mediaBuffer,
+      mediaType,
+      fileName,
+      mimetype,
+    });
+
+    res.json({
+      success: true,
+      sent: result.sent,
+      failed: result.failed,
+      message: `Hidetag berhasil dikirim ke ${result.sent} grup!`,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err?.message || 'Gagal mengirim hidetag' });
+  }
+});
+
 // List tracked deleted messages (.ghost logs)
 app.get('/api/ghost/messages', (req, res) => {
   const deleted = waService.getDeletedMessages();
@@ -512,6 +596,7 @@ app.get('/api/settings', (req, res) => {
     stats: db.stats,
     logs: db.logs.slice(0, 100),
     analytics: dbManager.getAnalytics(),
+    stickerSettings: dbManager.getStickerSettings(),
   });
 });
 
